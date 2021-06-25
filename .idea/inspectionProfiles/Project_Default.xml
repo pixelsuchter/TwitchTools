@@ -1,0 +1,72 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="PyPep8Inspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredErrors">
+        <list>
+          <option value="E501" />
+          <option value="E402" />
+          <option value="E303" />
+          <option value="E221" />
+          <option value="E305" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyPep8NamingInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredErrors">
+        <list>
+          <option value="N802" />
+          <option value="N806" />
+          <option value="N801" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyUnresolvedReferencesInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredIdentifiers">
+        <list>
+          <option value="panel.micropython" />
+          <option value="grafics2.micropython" />
+          <option value="grafics.micropython" />
+          <option value="grafics3.micropython" />
+          <option value="panel.*" />
+          <option value="machine.Timer.init" />
+          <option value="neopixel" />
+          <option value="machine.*" />
+          <option value="main.micropython" />
+          <option value="uos" />
+          <option value="ustruct" />
+          <option value="ili934x.micropython" />
+          <option value="usocket" />
+          <option value="ntptime" />
+          <option value="int.decode" />
+          <option value="time.sleep_ms" />
+          <option value="dht" />
+          <option value="micropython.native" />
+          <option value="esp32" />
+          <option value="mcron" />
+          <option value="uarray.array.__setitem__" />
+          <option value="utime.ticks_diff" />
+          <option value="uarray.array.__getitem__" />
+          <option value="mcp9808.const" />
+          <option value="hardware_setup.micropython" />
+          <option value="ujson" />
+          <option value="urequests" />
+          <option value="ili934x.const" />
+          <option value="fader.micropython" />
+          <option value="application.micropython" />
+          <option value="application_slot.micropython" />
+          <option value="ili934x.Display.CONTRAST_MASTER" />
+          <option value="powermeter.micropython" />
+          <option value="powermeter.ptr16" />
+          <option value="powermeter.ptr" />
+          <option value="powermeter.ptr32" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="SpellCheckingInspection" enabled="false" level="TYPO" enabled_by_default="false">
+      <option name="processCode" value="true" />
+      <option name="processLiterals" value="true" />
+      <option name="processComments" value="true" />
+    </inspection_tool>
+  </profile>
+</component>

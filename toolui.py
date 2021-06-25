@@ -8,30 +8,41 @@ from PySide6.QtWidgets import *
 import twitchapi
 
 
-class TwitchToolUi(QtWidgets.QWidget):
-    def __init__(self):
-        super().__init__()
+class TwitchToolUi(QtWidgets.QTabWidget):
+    def __init__(self, parent=None):
+        super(TwitchToolUi, self).__init__(parent)
+        self.following_tab = QtWidgets.QWidget()
+        self.user_info_tab = QtWidgets.QWidget()
+
+        self.addTab(self.following_tab, "Following")
+        self.addTab(self.user_info_tab, "User Info")
+
+        self.init_follow_grabber(self.following_tab)
+
         self.api = twitchapi.Twitch_api()
 
+
+    # Follow Grabber
+    def init_follow_grabber(self, parent):
         # Create widgets
-        self.username_LineEdit = QLineEdit("")
-        self.getFollows_Button = QPushButton("Get Follows")
-        self.followList_Widget = QTableWidget()
+        self.username_LineEdit = QLineEdit("", parent=parent)
+        self.getFollows_Button = QPushButton("Get Follows", parent=parent)
+        self.followList_Widget = QTableWidget(parent=parent)
         self.followList_Widget.setColumnCount(2)
         self.followList_Widget.setHorizontalHeaderItem(0, QTableWidgetItem("Name"))
         self.followList_Widget.setHorizontalHeaderItem(1, QTableWidgetItem("Time of follow"))
-        self.followList_SortingBox = QComboBox()
+        self.followList_SortingBox = QComboBox(parent=parent)
         self.followList_SortingBox.addItems(["Name A-Z", "Name Z-A", "Follow time New-Old", "Follow time Old-New"])
 
         # Create layout and add widgets
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(parent)
         layout.addWidget(self.username_LineEdit)
         layout.addWidget(self.getFollows_Button)
         layout.addWidget(self.followList_SortingBox)
         layout.addWidget(self.followList_Widget)
 
         # Set dialog layout
-        self.setLayout(layout)
+        parent.setLayout(layout)
 
         # Add actions
         self.getFollows_Button.clicked.connect(self.getFollows_Button_Action)
@@ -62,3 +73,4 @@ class TwitchToolUi(QtWidgets.QWidget):
                     self.followList_Widget.setItem(row, 0, QTableWidgetItem(follow[0]))
                     self.followList_Widget.setItem(row, 1, QTableWidgetItem(follow[1]))
                 self.followList_SortingBox_Action()  # Update sorting
+
