@@ -34,8 +34,12 @@ class Twitch_api:
         names = {follow["to_login"]: follow["followed_at"] for follow in response["data"]}
         offset = response["pagination"]
         while len(names.keys()) < total_length:
-            response = self.twitch_helix.get_users_follows(from_id=user_id, first=min(100, total_length-len(names)), after=offset["cursor"])
+            response = self.twitch_helix.get_users_follows(from_id=user_id, first=min(100, total_length - len(names)), after=offset["cursor"])
             names.update({follow["to_login"]: follow["followed_at"] for follow in response["data"]})
             offset = response["pagination"]
         print(len(names), " of ", total_length)
         return names
+
+    def get_user_info(self, user_id):
+        userinfo = self.twitch_legacy.users.get_by_id(user_id)
+        return userinfo
