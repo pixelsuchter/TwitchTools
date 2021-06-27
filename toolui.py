@@ -1,7 +1,7 @@
 import random
 import sys
 
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtGui
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import *
 
@@ -22,6 +22,8 @@ class TwitchToolUi(QtWidgets.QTabWidget):
 
         self.api = twitchapi.Twitch_api()
 
+    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+        print("Window closed")
 
     # Follow Grabber
     def init_follow_grabber(self, parent):
@@ -34,7 +36,8 @@ class TwitchToolUi(QtWidgets.QTabWidget):
         self.follow_grabber_follow_Table.setHorizontalHeaderItem(1, QTableWidgetItem("Time of follow"))
         self.follow_grabber_follow_Table.resizeColumnsToContents()
         self.follow_grabber_followList_SortingBox = QComboBox()
-        self.follow_grabber_followList_SortingBox.addItems(["Name A-Z", "Name Z-A", "Follow time New-Old", "Follow time Old-New"])
+        self.follow_grabber_followList_SortingBox.addItems(
+            ["Name A-Z", "Name Z-A", "Follow time New-Old", "Follow time Old-New"])
 
         # Create layout and add widgets
         layout = QVBoxLayout()
@@ -48,7 +51,8 @@ class TwitchToolUi(QtWidgets.QTabWidget):
 
         # Add actions
         self.follow_grabber_getFollows_Button.clicked.connect(self.follow_grabber_getFollows_Button_Action)
-        self.follow_grabber_followList_SortingBox.currentTextChanged.connect(self.follow_grabber_followList_SortingBox_Action)
+        self.follow_grabber_followList_SortingBox.currentTextChanged.connect(
+            self.follow_grabber_followList_SortingBox_Action)
 
     def follow_grabber_followList_SortingBox_Action(self):
         if self.follow_grabber_followList_SortingBox.currentText() == "Name A-Z":
@@ -86,7 +90,6 @@ class TwitchToolUi(QtWidgets.QTabWidget):
         self.user_info_info_Table.setColumnCount(2)
         self.user_info_info_Table.setHorizontalHeaderItem(0, QTableWidgetItem(" "))
         self.user_info_info_Table.setHorizontalHeaderItem(1, QTableWidgetItem(" "))
-
 
         # Create layout and add widgets
         layout = QVBoxLayout()
