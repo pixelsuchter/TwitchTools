@@ -2,7 +2,7 @@ import json
 import random
 import sys
 
-from PySide6 import QtWidgets, QtGui
+from PySide6 import QtWidgets, QtGui, QtCore
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import *
 
@@ -48,6 +48,7 @@ class TwitchToolUi(QtWidgets.QWidget):
     def print_status(self, status: str):
         self.status_label.setText(status)
 
+    # <editor-fold desc="Follow Grabber">
     # Follow Grabber
     def init_follow_grabber(self, parent):
         # Create widgets
@@ -76,6 +77,13 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.follow_grabber_getFollows_Button.clicked.connect(self.follow_grabber_get_follows_button_action)
         self.follow_grabber_followList_SortingBox.currentTextChanged.connect(
             self.follow_grabber_follow_list_sorting_box_action)
+        self.follow_grabber_follow_Table.doubleClicked.connect(self.follow_grabber_follow_table_action)
+
+    def follow_grabber_follow_table_action(self, model_index: QtCore.QModelIndex):
+        name = self.follow_grabber_follow_Table.item(model_index.row(), 0).text()
+        self.user_info_username_LineEdit.setText(name)
+        self.user_info_get_info_button_action()
+        self.tool_tab_widget.setCurrentWidget(self.user_info_tab)
 
     def follow_grabber_follow_list_sorting_box_action(self):
         if self.follow_grabber_followList_SortingBox.currentText() == "Name A-Z":
@@ -102,7 +110,9 @@ class TwitchToolUi(QtWidgets.QWidget):
                     self.follow_grabber_follow_Table.setItem(row, 1, QTableWidgetItem(follow[1]))
                 self.follow_grabber_follow_list_sorting_box_action()  # Update sorting
                 self.follow_grabber_follow_Table.resizeColumnsToContents()
+    # </editor-fold>
 
+    # <editor-fold desc="User Info">
     # User info
     def init_user_info(self, parent):
         # Create Widgets
@@ -137,3 +147,4 @@ class TwitchToolUi(QtWidgets.QWidget):
                     self.user_info_info_Table.setItem(row, 0, QTableWidgetItem(info[0]))
                     self.user_info_info_Table.setItem(row, 1, QTableWidgetItem(str(info[1])))
                 self.user_info_info_Table.resizeColumnsToContents()
+    # </editor-fold>
