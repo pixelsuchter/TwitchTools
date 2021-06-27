@@ -1,3 +1,4 @@
+import json
 import random
 import sys
 
@@ -9,8 +10,11 @@ import twitchapi
 
 
 class TwitchToolUi(QtWidgets.QWidget):
-    def __init__(self, parent=None):
-        super(TwitchToolUi, self).__init__(parent)
+    def __init__(self, settings):
+        super(TwitchToolUi, self).__init__()
+        self.old_settings = settings.copy()
+        self.settings = settings
+
         self.tool_tab_widget = QtWidgets.QTabWidget()
         self.following_tab = QtWidgets.QWidget()
         self.user_info_tab = QtWidgets.QWidget()
@@ -32,7 +36,12 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.api = twitchapi.Twitch_api()
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
-        print("Window closed")
+        self.settings["Window Size"] = [self.size().width(), self.size().height()]
+        if not (self.settings == self.old_settings):
+            with open("settings.json", "w") as settings_file:
+                json.dump(self.settings, settings_file, indent="  ")
+                self.print_status("Settings saved")
+                print("Settings saved")
 
     def print_status(self, status: str):
         self.status_label.setText(status)
@@ -62,11 +71,11 @@ class TwitchToolUi(QtWidgets.QWidget):
         parent.setLayout(layout)
 
         # Add actions
-        self.follow_grabber_getFollows_Button.clicked.connect(self.follow_grabber_getFollows_Button_Action)
+        self.follow_grabber_getFollows_Button.clicked.connect(self.follow_grabber_get_follows_button_action)
         self.follow_grabber_followList_SortingBox.currentTextChanged.connect(
-            self.follow_grabber_followList_SortingBox_Action)
+            self.follow_grabber_follow_list_sorting_box_action)
 
-    def follow_grabber_followList_SortingBox_Action(self):
+    def follow_grabber_follow_list_sorting_box_action(self):
         if self.follow_grabber_followList_SortingBox.currentText() == "Name A-Z":
             self.follow_grabber_follow_Table.sortByColumn(0, Qt.AscendingOrder)
         elif self.follow_grabber_followList_SortingBox.currentText() == "Name Z-A":
@@ -79,7 +88,7 @@ class TwitchToolUi(QtWidgets.QWidget):
             # todo error display
             pass
 
-    def follow_grabber_getFollows_Button_Action(self):
+    def follow_grabber_get_follows_button_action(self):
         self.follow_grabber_follow_Table.clearContents()
         name = self.follow_grabber_username_LineEdit.text()
         if name:
@@ -90,7 +99,7 @@ class TwitchToolUi(QtWidgets.QWidget):
                 for row, follow in enumerate(follows.items()):
                     self.follow_grabber_follow_Table.setItem(row, 0, QTableWidgetItem(follow[0]))
                     self.follow_grabber_follow_Table.setItem(row, 1, QTableWidgetItem(follow[1]))
-                self.follow_grabber_followList_SortingBox_Action()  # Update sorting
+                self.follow_grabber_follow_list_sorting_box_action()  # Update sorting
                 self.follow_grabber_follow_Table.resizeColumnsToContents()
 
     # User info
