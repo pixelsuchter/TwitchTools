@@ -37,6 +37,8 @@ class TwitchToolUi(QtWidgets.QWidget):
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         self.settings["Window Size"] = [self.size().width(), self.size().height()]
+        self.settings["Maximized"] = self.isMaximized()
+
         if not (self.settings == self.old_settings):
             with open("settings.json", "w") as settings_file:
                 json.dump(self.settings, settings_file, indent="  ")

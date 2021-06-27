@@ -9,7 +9,7 @@ import toolui
 
 def main():
     # Default settings
-    settings = {"Style Sheet": "Stylesheets/DarkTheme.qss", "Window Size": (800, 600)}
+    settings = {"Style Sheet": "Stylesheets/DarkTheme.qss", "Window Size": (800, 600), "Maximized": False}
 
     try:
         with open("settings.json", "r") as settings_file:
@@ -32,8 +32,10 @@ def main():
         widget.print_status("Failed to load Stylesheet")
 
     widget.resize(*settings["Window Size"])
-    widget.show()
-
+    if settings["Maximized"]:
+        widget.showMaximized()
+    else:
+        widget.show()
     sys.exit(app.exec())
 
 
