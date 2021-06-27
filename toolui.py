@@ -85,8 +85,7 @@ class TwitchToolUi(QtWidgets.QWidget):
         elif self.follow_grabber_followList_SortingBox.currentText() == "Follow time Old-New":
             self.follow_grabber_follow_Table.sortByColumn(1, Qt.AscendingOrder)
         else:
-            # todo error display
-            pass
+            self.print_status("Error in follow grabber")
 
     def follow_grabber_get_follows_button_action(self):
         self.follow_grabber_follow_Table.clearContents()
@@ -122,9 +121,9 @@ class TwitchToolUi(QtWidgets.QWidget):
         parent.setLayout(layout)
 
         # Add actions
-        self.user_info_getInfo_Button.clicked.connect(self.user_info_getInfo_Button_Action)
+        self.user_info_getInfo_Button.clicked.connect(self.user_info_get_info_button_action)
 
-    def user_info_getInfo_Button_Action(self):
+    def user_info_get_info_button_action(self):
         self.user_info_info_Table.clearContents()
         name = self.user_info_username_LineEdit.text()
         if name:
