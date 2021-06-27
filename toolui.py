@@ -18,12 +18,17 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.tool_tab_widget = QtWidgets.QTabWidget()
         self.following_tab = QtWidgets.QWidget()
         self.user_info_tab = QtWidgets.QWidget()
+        self.blocklist_info_tab = QtWidgets.QTabWidget()
 
         self.tool_tab_widget.addTab(self.following_tab, "Following")
         self.tool_tab_widget.addTab(self.user_info_tab, "User Info")
+        self.tool_tab_widget.addTab(self.blocklist_info_tab, "Blocklist Info")
+
+
 
         self.init_follow_grabber(self.following_tab)
         self.init_user_info(self.user_info_tab)
+        self.init_blocklist_info(self.blocklist_info_tab)
 
         self.status_label = QtWidgets.QLabel()
         self.status_label.setText("")
@@ -147,4 +152,29 @@ class TwitchToolUi(QtWidgets.QWidget):
                     self.user_info_info_Table.setItem(row, 0, QTableWidgetItem(info[0]))
                     self.user_info_info_Table.setItem(row, 1, QTableWidgetItem(str(info[1])))
                 self.user_info_info_Table.resizeColumnsToContents()
+    # </editor-fold>
+
+    # <editor-fold desc="Blocklist Info">
+    def init_blocklist_info(self, parent):
+        # Create Widgets
+        self.blocklist_get_blocklist_Button = QPushButton("Get Blocklist")
+        self.blocklist_info_Table = QTableWidget()
+        self.blocklist_info_Table.setColumnCount(2)
+        self.blocklist_info_Table.setHorizontalHeaderItem(0, QTableWidgetItem(" "))
+        self.blocklist_info_Table.setHorizontalHeaderItem(1, QTableWidgetItem(" "))
+
+        # Create layout and add widgets
+        layout = QVBoxLayout()
+        layout.addWidget(self.blocklist_get_blocklist_Button)
+        layout.addWidget(self.blocklist_info_Table)
+
+        # Set dialog layout
+        parent.setLayout(layout)
+
+        # Add actions
+        self.blocklist_get_blocklist_Button.clicked.connect(self.blocklist_get_blocklist_Button_action)
+
+    def blocklist_get_blocklist_Button_action(self):
+        self.blocklist_info_Table.clearContents()
+        self.api.get_all_blocked_users()
     # </editor-fold>
