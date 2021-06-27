@@ -8,22 +8,34 @@ from PySide6.QtWidgets import *
 import twitchapi
 
 
-class TwitchToolUi(QtWidgets.QTabWidget):
+class TwitchToolUi(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(TwitchToolUi, self).__init__(parent)
+        self.tool_tab_widget = QtWidgets.QTabWidget()
         self.following_tab = QtWidgets.QWidget()
         self.user_info_tab = QtWidgets.QWidget()
 
-        self.addTab(self.following_tab, "Following")
-        self.addTab(self.user_info_tab, "User Info")
+        self.tool_tab_widget.addTab(self.following_tab, "Following")
+        self.tool_tab_widget.addTab(self.user_info_tab, "User Info")
 
         self.init_follow_grabber(self.following_tab)
         self.init_user_info(self.user_info_tab)
+
+        self.status_label = QtWidgets.QLabel()
+        self.status_label.setText("")
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.tool_tab_widget)
+        layout.addWidget(self.status_label)
+        self.setLayout(layout)
 
         self.api = twitchapi.Twitch_api()
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         print("Window closed")
+
+    def print_status(self, status: str):
+        self.status_label.setText(status)
 
     # Follow Grabber
     def init_follow_grabber(self, parent):
