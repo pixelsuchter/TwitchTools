@@ -32,6 +32,7 @@ class TwitchToolUi(QtWidgets.QTabWidget):
         self.follow_grabber_follow_Table.setColumnCount(2)
         self.follow_grabber_follow_Table.setHorizontalHeaderItem(0, QTableWidgetItem("Name"))
         self.follow_grabber_follow_Table.setHorizontalHeaderItem(1, QTableWidgetItem("Time of follow"))
+        self.follow_grabber_follow_Table.resizeColumnsToContents()
         self.follow_grabber_followList_SortingBox = QComboBox()
         self.follow_grabber_followList_SortingBox.addItems(["Name A-Z", "Name Z-A", "Follow time New-Old", "Follow time Old-New"])
 
@@ -74,6 +75,7 @@ class TwitchToolUi(QtWidgets.QTabWidget):
                     self.follow_grabber_follow_Table.setItem(row, 0, QTableWidgetItem(follow[0]))
                     self.follow_grabber_follow_Table.setItem(row, 1, QTableWidgetItem(follow[1]))
                 self.follow_grabber_followList_SortingBox_Action()  # Update sorting
+                self.follow_grabber_follow_Table.resizeColumnsToContents()
 
     # User info
     def init_user_info(self, parent):
@@ -109,3 +111,4 @@ class TwitchToolUi(QtWidgets.QTabWidget):
                 for row, info in enumerate(user_info.items()):
                     self.user_info_info_Table.setItem(row, 0, QTableWidgetItem(info[0]))
                     self.user_info_info_Table.setItem(row, 1, QTableWidgetItem(str(info[1])))
+                self.user_info_info_Table.resizeColumnsToContents()
