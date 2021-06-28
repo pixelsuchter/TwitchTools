@@ -2,10 +2,11 @@ import json
 import random
 import sys
 import threading
+import time
 from threading import Thread
 
 from PySide6 import QtWidgets, QtGui, QtCore
-from PySide6.QtGui import Qt
+from PySide6.QtGui import Qt, QIcon
 from PySide6.QtWidgets import *
 
 import twitchapi
@@ -130,7 +131,9 @@ class TwitchToolUi(QtWidgets.QWidget):
         if name:
             user_id = self.api.names_to_id(name)[0]
             if user_id:
-                Thread(target=self.api.get_all_followed_channel_names, args=(user_id, self.follow_grabber_get_follows_button_thread_return)).start()
+                thrd = Thread(target=self.api.get_all_followed_channel_names, args=(user_id, self.follow_grabber_get_follows_button_thread_return))
+                thrd.setDaemon(True)
+                thrd.start()
 
     def follow_grabber_get_follows_button_thread_return(self, follows):
         self.follow_grabber_follow_Table.setRowCount(len(follows))
@@ -176,7 +179,9 @@ class TwitchToolUi(QtWidgets.QWidget):
         if name:
             user_id = self.api.names_to_id(name)[0]
             if user_id:
-                Thread(target=self.api.get_user_info, args=(user_id, self.user_info_get_info_button_thread_callback)).start()
+                thrd = Thread(target=self.api.get_user_info, args=(user_id, self.user_info_get_info_button_thread_callback))
+                thrd.setDaemon(True)
+                thrd.start()
 
     def user_info_get_info_button_thread_callback(self, user_info):
         self.user_info_info_Table.setRowCount(len(user_info))
@@ -212,13 +217,20 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.blocklist_get_blocklist_Button.setEnabled(False)
         self.add_status("Grabbing blocklist, please wait")
         self.blocklist_info_Table.clearContents()
-        Thread(target=self.api.get_all_blocked_users, args=(self.blocklist_get_blocklist_Button_thread_callback,)).start()
+        thrd = Thread(target=self.api.get_all_blocked_users, args=(self.blocklist_get_blocklist_Button_thread_callback, self.blocklist_get_blocklist_Button_thread_done))
+        thrd.setDaemon(True)
+        thrd.start()
 
     def blocklist_get_blocklist_Button_thread_callback(self, blocklist):
-        self.blocklist_info_Table.setRowCount(len(blocklist))
+        row_count = self.blocklist_info_Table.rowCount()
+        self.blocklist_info_Table.setRowCount(row_count + len(blocklist))
         for row, line in enumerate(blocklist.items()):
             for col, entry in enumerate(line):
-                self.blocklist_info_Table.setItem(row, col, QTableWidgetItem(str(entry)))
+                # print(entry)  DO NOT REMOVE Fixes program crash with large table
+                self.blocklist_info_Table.setItem(row+row_count, col, QTableWidgetItem(QIcon(), str(entry)))
+
+
+    def blocklist_get_blocklist_Button_thread_done(self):
         self.remove_status("Grabbing blocklist, please wait")
         self.blocklist_get_blocklist_Button.setEnabled(True)
     # </editor-fold>

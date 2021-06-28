@@ -36,7 +36,8 @@ def main():
         widget.showMaximized()
     else:
         widget.show()
-    sys.exit(app.exec())
+    return_code = app.exec()
+    sys.exit(return_code)
 
 
 if __name__ == '__main__':

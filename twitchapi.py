@@ -57,16 +57,16 @@ class Twitch_api:
             userinfo = self.twitch_legacy.users.get_by_id(user_id)
         callback(userinfo)
 
-    def get_all_blocked_users(self, callback):
+    def get_all_blocked_users(self, callback, callback_done):
         try:
             response = self.twitch_helix.get_user_block_list(broadcaster_id=self.own_id, first=100)
-            names = {follow["user_login"]: follow["user_id"] for follow in response["data"]}
-            offset = response["pagination"]
+            callback({follow["user_login"]: follow["user_id"] for follow in response["data"]})
+            page = response["pagination"]
             while response["pagination"]:
                 with self.api_lock:
-                    response = self.twitch_helix.get_user_block_list(broadcaster_id=self.own_id, first=100, after=offset["cursor"])
-                names.update({follow["user_login"]: follow["user_id"] for follow in response["data"]})
-                offset = response["pagination"]
-            callback(names)
+                    response = self.twitch_helix.get_user_block_list(broadcaster_id=self.own_id, first=100, after=page["cursor"])
+                callback({follow["user_login"]: follow["user_id"] for follow in response["data"]})
+                page = response["pagination"]
+            callback_done()
         except Exception as e:
             print(e)
