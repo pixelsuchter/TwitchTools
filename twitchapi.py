@@ -5,11 +5,13 @@ from typing import Union, List
 import twitch
 import twitchAPI
 from twitchAPI import UserAuthenticator
+from threading import Lock
 
 
 
 class Twitch_api:
     def __init__(self):
+        self.api_lock = Lock()
         scopes = [twitchAPI.AuthScope.USER_EDIT, twitchAPI.AuthScope.MODERATION_READ, twitchAPI.AuthScope.CHANNEL_READ_REDEMPTIONS, twitchAPI.AuthScope.CHAT_READ,
                   twitchAPI.AuthScope.USER_READ_BLOCKED_USERS]
 
@@ -33,30 +35,35 @@ class Twitch_api:
         self.twitch_legacy = twitch.TwitchClient(client_id=credentials["client id"], oauth_token=credentials["oauth token"])
 
     def names_to_id(self, names: Union[List, str]):
-        response = self.twitch_legacy.users.translate_usernames_to_ids(names)
+        with self.api_lock:
+            response = self.twitch_legacy.users.translate_usernames_to_ids(names)
         ids = [user["id"] for user in response]
         return ids
 
-    def get_all_followed_channel_names(self, user_id):
-        response = self.twitch_helix.get_users_follows(from_id=user_id, first=100)
+    def get_all_followed_channel_names(self, user_id, callback):
+        with self.api_lock:
+            response = self.twitch_helix.get_users_follows(from_id=user_id, first=100)
         names = {follow["to_login"]: follow["followed_at"] for follow in response["data"]}
         offset = response["pagination"]
         while response["pagination"]:
-            response = self.twitch_helix.get_users_follows(from_id=user_id, first=100, after=offset["cursor"])
+            with self.api_lock:
+                response = self.twitch_helix.get_users_follows(from_id=user_id, first=100, after=offset["cursor"])
             names.update({follow["to_login"]: follow["followed_at"] for follow in response["data"]})
             offset = response["pagination"]
-        return names
+        callback(names)
 
-    def get_user_info(self, user_id):
-        userinfo = self.twitch_legacy.users.get_by_id(user_id)
-        return userinfo
+    def get_user_info(self, user_id, callback):
+        with self.api_lock:
+            userinfo = self.twitch_legacy.users.get_by_id(user_id)
+        callback(userinfo)
 
-    def get_all_blocked_users(self):
+    def get_all_blocked_users(self, callback):
         response = self.twitch_helix.get_user_block_list(broadcaster_id=self.own_id, first=100)
         names = {follow["user_login"]: follow["user_id"] for follow in response["data"]}
         offset = response["pagination"]
         while response["pagination"]:
-            response = self.twitch_helix.get_user_block_list(broadcaster_id=self.own_id, first=100, after=offset["cursor"])
+            with self.api_lock:
+                response = self.twitch_helix.get_user_block_list(broadcaster_id=self.own_id, first=100, after=offset["cursor"])
             names.update({follow["user_login"]: follow["user_id"] for follow in response["data"]})
             offset = response["pagination"]
-        return names
+        callback(names)
