@@ -1,6 +1,7 @@
 import json
 import random
 import sys
+import threading
 from threading import Thread
 
 from PySide6 import QtWidgets, QtGui, QtCore
@@ -10,11 +11,20 @@ from PySide6.QtWidgets import *
 import twitchapi
 
 
+def thread_exception_callback(*args, **kwargs):
+    print(args, kwargs)
+
+
+threading.excepthook = thread_exception_callback
+
+
 class TwitchToolUi(QtWidgets.QWidget):
     def __init__(self, settings):
         super(TwitchToolUi, self).__init__()
         self.old_settings = settings.copy()
         self.settings = settings
+
+        self.status_list = ["Idle"]
 
         self.tool_tab_widget = QtWidgets.QTabWidget()
         self.following_tab = QtWidgets.QWidget()
@@ -24,8 +34,6 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.tool_tab_widget.addTab(self.following_tab, "Following")
         self.tool_tab_widget.addTab(self.user_info_tab, "User Info")
         self.tool_tab_widget.addTab(self.blocklist_info_tab, "Blocklist Info")
-
-
 
         self.init_follow_grabber(self.following_tab)
         self.init_user_info(self.user_info_tab)
@@ -48,11 +56,21 @@ class TwitchToolUi(QtWidgets.QWidget):
         if not (self.settings == self.old_settings):
             with open("settings.json", "w") as settings_file:
                 json.dump(self.settings, settings_file, indent="  ")
-                self.print_status("Settings saved")
                 print("Settings saved")
 
-    def print_status(self, status: str):
-        self.status_label.setText(status)
+    # <editor-fold desc="Status bar">
+    def add_status(self, status: str):
+        self.status_list.append(status)
+        self.update_status()
+
+    def update_status(self):
+        self.status_label.setText(self.status_list[-1])
+
+    def remove_status(self, status: str):
+        self.status_list.remove(status)
+        self.update_status()
+
+    # </editor-fold>
 
     # <editor-fold desc="Follow Grabber">
     # Follow Grabber
@@ -101,19 +119,18 @@ class TwitchToolUi(QtWidgets.QWidget):
         elif self.follow_grabber_followList_SortingBox.currentText() == "Follow time Old-New":
             self.follow_grabber_follow_Table.sortByColumn(1, Qt.AscendingOrder)
         else:
-            self.print_status("Error in follow grabber")
+            self.update_status("Error in follow grabber")
 
     # <editor-fold desc="Follow grabber button action">
     def follow_grabber_get_follows_button_action(self):
         self.follow_grabber_getFollows_Button.setEnabled(False)
-        self.status_label.setText("Getting followers, please wait")
+        self.add_status("Getting followers, please wait")
         self.follow_grabber_follow_Table.clearContents()
         name = self.follow_grabber_username_LineEdit.text()
         if name:
             user_id = self.api.names_to_id(name)[0]
             if user_id:
                 Thread(target=self.api.get_all_followed_channel_names, args=(user_id, self.follow_grabber_get_follows_button_thread_return)).start()
-
 
     def follow_grabber_get_follows_button_thread_return(self, follows):
         self.follow_grabber_follow_Table.setRowCount(len(follows))
@@ -122,8 +139,9 @@ class TwitchToolUi(QtWidgets.QWidget):
                 self.follow_grabber_follow_Table.setItem(row, col, QTableWidgetItem(str(entry)))
         self.follow_grabber_follow_list_sorting_box_action()  # Update sorting
         self.follow_grabber_follow_Table.resizeColumnsToContents()
-        self.status_label.setText("Done")
+        self.remove_status("Getting followers, please wait")
         self.follow_grabber_getFollows_Button.setEnabled(True)
+
     # </editor-fold>
 
     # </editor-fold>
@@ -152,7 +170,7 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.user_info_getInfo_Button.clicked.connect(self.user_info_get_info_button_action)
 
     def user_info_get_info_button_action(self):
-        self.status_label.setText("Getting user information, please wait")
+        self.add_status("Getting user information, please wait")
         self.user_info_info_Table.clearContents()
         name = self.user_info_username_LineEdit.text()
         if name:
@@ -166,7 +184,8 @@ class TwitchToolUi(QtWidgets.QWidget):
             for col, entry in enumerate(line):
                 self.user_info_info_Table.setItem(row, col, QTableWidgetItem(str(entry)))
         self.user_info_info_Table.resizeColumnsToContents()
-        self.status_label.setText("Done")
+        self.remove_status("Getting user information, please wait")
+
     # </editor-fold>
 
     # <editor-fold desc="Blocklist Info">
@@ -191,15 +210,15 @@ class TwitchToolUi(QtWidgets.QWidget):
 
     def blocklist_get_blocklist_Button_action(self):
         self.blocklist_get_blocklist_Button.setEnabled(False)
-        self.status_label.setText("Grabbing blocklist, please wait")
+        self.add_status("Grabbing blocklist, please wait")
         self.blocklist_info_Table.clearContents()
-        Thread(target=self.api.get_all_blocked_users, args=(self.blocklist_get_blocklist_Button_thread_callback, )).start()
+        Thread(target=self.api.get_all_blocked_users, args=(self.blocklist_get_blocklist_Button_thread_callback,)).start()
 
     def blocklist_get_blocklist_Button_thread_callback(self, blocklist):
         self.blocklist_info_Table.setRowCount(len(blocklist))
         for row, line in enumerate(blocklist.items()):
             for col, entry in enumerate(line):
                 self.blocklist_info_Table.setItem(row, col, QTableWidgetItem(str(entry)))
-        self.status_label.setText("Done")
+        self.remove_status("Grabbing blocklist, please wait")
         self.blocklist_get_blocklist_Button.setEnabled(True)
     # </editor-fold>
