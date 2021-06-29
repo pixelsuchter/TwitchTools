@@ -29,7 +29,7 @@ def main():
             _style = f.read()
             app.setStyleSheet(_style)
     except:
-        widget.update_status("Failed to load Stylesheet")
+        widget.add_status("Failed to load Stylesheet")
 
     widget.resize(*settings["Window Size"])
     if settings["Maximized"]:
