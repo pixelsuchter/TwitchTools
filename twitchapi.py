@@ -40,33 +40,35 @@ class Twitch_api:
         ids = [user["id"] for user in response]
         return ids
 
-    def get_all_followed_channel_names(self, user_id, callback):
+    def get_all_followed_channel_names(self, user_id, progress_callback):
         with self.api_lock:
             response = self.twitch_helix.get_users_follows(from_id=user_id, first=100)
-        names = {follow["to_login"]: follow["followed_at"] for follow in response["data"]}
+        progress_callback.emit({follow["to_login"]: follow["followed_at"] for follow in response["data"]})
         offset = response["pagination"]
+        i = 0
         while response["pagination"]:
             with self.api_lock:
                 response = self.twitch_helix.get_users_follows(from_id=user_id, first=100, after=offset["cursor"])
-            names.update({follow["to_login"]: follow["followed_at"] for follow in response["data"]})
+                i += 1
+            progress_callback.emit({follow["to_login"]: follow["followed_at"] for follow in response["data"]})
             offset = response["pagination"]
-        callback(names)
 
-    def get_user_info(self, user_id, callback):
+
+    def get_user_info(self, user_id, progress_callback):
         with self.api_lock:
             userinfo = self.twitch_legacy.users.get_by_id(user_id)
-        callback(userinfo)
+        progress_callback.emit(userinfo)
 
-    def get_all_blocked_users(self, callback, callback_done):
+
+    def get_all_blocked_users(self, progress_callback):
         try:
             response = self.twitch_helix.get_user_block_list(broadcaster_id=self.own_id, first=100)
-            callback({follow["user_login"]: follow["user_id"] for follow in response["data"]})
+            progress_callback.emit({follow["user_login"]: follow["user_id"] for follow in response["data"]})
             page = response["pagination"]
             while response["pagination"]:
                 with self.api_lock:
                     response = self.twitch_helix.get_user_block_list(broadcaster_id=self.own_id, first=100, after=page["cursor"])
-                callback({follow["user_login"]: follow["user_id"] for follow in response["data"]})
+                progress_callback.emit({follow["user_login"]: follow["user_id"] for follow in response["data"]})
                 page = response["pagination"]
-            callback_done()
         except Exception as e:
             print(e)

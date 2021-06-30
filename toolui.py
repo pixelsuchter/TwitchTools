@@ -3,20 +3,88 @@ import random
 import sys
 import threading
 import time
+import traceback
 from threading import Thread
 
 from PySide6 import QtWidgets, QtGui, QtCore
+from PySide6.QtCore import Slot, QRunnable, Signal, QObject, QThreadPool
 from PySide6.QtGui import Qt, QIcon
 from PySide6.QtWidgets import *
 
 import twitchapi
 
 
-def thread_exception_callback(*args, **kwargs):
-    print(args, kwargs)
+
+# <editor-fold desc="Multithread worker">
+class WorkerSignals(QObject):
+    """
+    Defines the signals available from a running worker thread.
+
+    Supported signals are:
+
+    finished
+        No data
+
+    error
+        tuple (exctype, value, traceback.format_exc() )
+
+    result
+        object data returned from processing, anything
+
+    progress
+        int indicating % progress
+
+    """
+    finished = Signal()
+    error = Signal(tuple)
+    result = Signal(object)
+    progress = Signal(object)
 
 
-threading.excepthook = thread_exception_callback
+class Worker(QRunnable):
+    """
+    Worker thread
+
+    Inherits from QRunnable to handler worker thread setup, signals and wrap-up.
+
+    :param callback: The function callback to run on this worker thread. Supplied args and
+                     kwargs will be passed through to the runner.
+    :type callback: function
+    :param args: Arguments to pass to the callback function
+    :param kwargs: Keywords to pass to the callback function
+
+    """
+
+    def __init__(self, fn, *args, **kwargs):
+        super(Worker, self).__init__()
+
+        # Store constructor arguments (re-used for processing)
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = WorkerSignals()
+
+        # Add the callback to our kwargs
+        self.kwargs['progress_callback'] = self.signals.progress
+
+    @Slot()
+    def run(self):
+        """
+        Initialise the runner function with passed args, kwargs.
+        """
+
+        # Retrieve args/kwargs here; and fire processing using them
+        try:
+            result = self.fn(*self.args, **self.kwargs)
+        except:
+            traceback.print_exc()
+            exctype, value = sys.exc_info()[:2]
+            self.signals.error.emit((exctype, value, traceback.format_exc()))
+        else:
+            self.signals.result.emit(result)  # Return the result of the processing
+        finally:
+            self.signals.finished.emit()  # Done
+# </editor-fold>
 
 
 class TwitchToolUi(QtWidgets.QWidget):
@@ -26,6 +94,9 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.settings = settings
 
         self.status_list = ["Idle"]
+
+        self.threadpool = QThreadPool()
+        print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
 
         self.tool_tab_widget = QtWidgets.QTabWidget()
         self.following_tab = QtWidgets.QWidget()
@@ -49,6 +120,9 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.setLayout(layout)
 
         self.api = twitchapi.Twitch_api()
+
+    def print_output(self, s):
+        print(s)
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         self.settings["Window Size"] = [self.size().width(), self.size().height()]
@@ -104,6 +178,9 @@ class TwitchToolUi(QtWidgets.QWidget):
             self.follow_grabber_follow_list_sorting_box_action)
         self.follow_grabber_follow_Table.doubleClicked.connect(self.follow_grabber_follow_table_action)
 
+    def print_output(self, s):
+        print(s)
+
     def follow_grabber_follow_table_action(self, model_index: QtCore.QModelIndex):
         name = self.follow_grabber_follow_Table.item(model_index.row(), 0).text()
         self.user_info_username_LineEdit.setText(name)
@@ -120,26 +197,32 @@ class TwitchToolUi(QtWidgets.QWidget):
         elif self.follow_grabber_followList_SortingBox.currentText() == "Follow time Old-New":
             self.follow_grabber_follow_Table.sortByColumn(1, Qt.AscendingOrder)
         else:
-            self.update_status("Error in follow grabber")
+            self.add_status("Error in follow grabber")
+
 
     # <editor-fold desc="Follow grabber button action">
     def follow_grabber_get_follows_button_action(self):
         self.follow_grabber_getFollows_Button.setEnabled(False)
         self.add_status("Getting followers, please wait")
         self.follow_grabber_follow_Table.clearContents()
+        self.follow_grabber_follow_Table.setRowCount(0)
         name = self.follow_grabber_username_LineEdit.text()
         if name:
             user_id = self.api.names_to_id(name)[0]
             if user_id:
-                thrd = Thread(target=self.api.get_all_followed_channel_names, args=(user_id, self.follow_grabber_get_follows_button_thread_return))
-                thrd.setDaemon(True)
-                thrd.start()
+                worker = Worker(self.api.get_all_followed_channel_names, user_id)
+                worker.signals.progress.connect(self.follow_grabber_get_follows_button_thread_return)
+                worker.signals.result.connect(self.follow_grabber_get_follows_button_thread_done)
+                self.threadpool.start(worker)
 
     def follow_grabber_get_follows_button_thread_return(self, follows):
-        self.follow_grabber_follow_Table.setRowCount(len(follows))
+        row_count = self.follow_grabber_follow_Table.rowCount()
+        self.follow_grabber_follow_Table.setRowCount(row_count + len(follows))
         for row, line in enumerate(follows.items()):
             for col, entry in enumerate(line):
-                self.follow_grabber_follow_Table.setItem(row, col, QTableWidgetItem(str(entry)))
+                self.follow_grabber_follow_Table.setItem(row + row_count, col, QTableWidgetItem(QIcon(), str(entry)))
+
+    def follow_grabber_get_follows_button_thread_done(self):
         self.follow_grabber_follow_list_sorting_box_action()  # Update sorting
         self.follow_grabber_follow_Table.resizeColumnsToContents()
         self.remove_status("Getting followers, please wait")
@@ -177,18 +260,32 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.user_info_info_Table.clearContents()
         name = self.user_info_username_LineEdit.text()
         if name:
-            user_id = self.api.names_to_id(name)[0]
-            if user_id:
-                thrd = Thread(target=self.api.get_user_info, args=(user_id, self.user_info_get_info_button_thread_callback))
-                thrd.setDaemon(True)
-                thrd.start()
+            result = self.api.names_to_id(name)
+            if result:
+                user_id = result[0]
+                if user_id:
+                    worker = Worker(self.api.get_user_info, user_id)
+                    worker.signals.progress.connect(self.user_info_get_info_button_progress)
+                    worker.signals.result.connect(self.user_info_get_info_button_done)
+                    self.threadpool.start(worker)
+                else:
+                    self.user_info_get_info_button_progress(None)
+            else:
+                self.user_info_get_info_button_progress(None)
 
-    def user_info_get_info_button_thread_callback(self, user_info):
-        self.user_info_info_Table.setRowCount(len(user_info))
-        for row, line in enumerate(user_info.items()):
-            for col, entry in enumerate(line):
-                self.user_info_info_Table.setItem(row, col, QTableWidgetItem(str(entry)))
-        self.user_info_info_Table.resizeColumnsToContents()
+    def user_info_get_info_button_progress(self, user_info):
+        if user_info:
+            self.user_info_info_Table.setRowCount(len(user_info))
+            for row, line in enumerate(user_info.items()):
+                for col, entry in enumerate(line):
+                    self.user_info_info_Table.setItem(row, col, QTableWidgetItem(str(entry)))
+            self.user_info_info_Table.resizeColumnsToContents()
+        else:
+            self.user_info_info_Table.setRowCount(1)
+            self.user_info_info_Table.setItem(0, 0, QTableWidgetItem("User"))
+            self.user_info_info_Table.setItem(0, 1, QTableWidgetItem("Invalid"))
+
+    def user_info_get_info_button_done(self):
         self.remove_status("Getting user information, please wait")
 
     # </editor-fold>
@@ -217,20 +314,20 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.blocklist_get_blocklist_Button.setEnabled(False)
         self.add_status("Grabbing blocklist, please wait")
         self.blocklist_info_Table.clearContents()
-        thrd = Thread(target=self.api.get_all_blocked_users, args=(self.blocklist_get_blocklist_Button_thread_callback, self.blocklist_get_blocklist_Button_thread_done))
-        thrd.setDaemon(True)
-        thrd.start()
+        self.blocklist_info_Table.setRowCount(0)
+        worker = Worker(self.api.get_all_blocked_users)
+        worker.signals.progress.connect(self.blocklist_get_blocklist_Button_progress)
+        worker.signals.result.connect(self.blocklist_get_blocklist_Button_done)
+        self.threadpool.start(worker)
 
-    def blocklist_get_blocklist_Button_thread_callback(self, blocklist):
+    def blocklist_get_blocklist_Button_progress(self, blocklist):
         row_count = self.blocklist_info_Table.rowCount()
         self.blocklist_info_Table.setRowCount(row_count + len(blocklist))
         for row, line in enumerate(blocklist.items()):
             for col, entry in enumerate(line):
-                # print(entry)  DO NOT REMOVE Fixes program crash with large table
-                self.blocklist_info_Table.setItem(row+row_count, col, QTableWidgetItem(QIcon(), str(entry)))
+                self.blocklist_info_Table.setItem(row + row_count, col, QTableWidgetItem(QIcon(), str(entry)))
 
-
-    def blocklist_get_blocklist_Button_thread_done(self):
+    def blocklist_get_blocklist_Button_done(self):
         self.remove_status("Grabbing blocklist, please wait")
         self.blocklist_get_blocklist_Button.setEnabled(True)
     # </editor-fold>
