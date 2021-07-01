@@ -8,7 +8,6 @@ from twitchAPI import UserAuthenticator
 from threading import Lock
 
 
-
 class Twitch_api:
     def __init__(self):
         self.api_lock = Lock()
@@ -53,22 +52,20 @@ class Twitch_api:
             progress_callback.emit({follow["to_login"]: follow["followed_at"] for follow in response["data"]})
             offset = response["pagination"]
 
-
     def get_user_info(self, user_id, progress_callback):
         with self.api_lock:
             userinfo = self.twitch_legacy.users.get_by_id(user_id)
         progress_callback.emit(userinfo)
 
-
     def get_all_blocked_users(self, progress_callback):
         try:
             response = self.twitch_helix.get_user_block_list(broadcaster_id=self.own_id, first=100)
-            progress_callback.emit({follow["user_login"]: follow["user_id"] for follow in response["data"]})
+            progress_callback.emit({response_element["user_login"]: response_element["user_id"] for response_element in response["data"]})
             page = response["pagination"]
             while response["pagination"]:
                 with self.api_lock:
                     response = self.twitch_helix.get_user_block_list(broadcaster_id=self.own_id, first=100, after=page["cursor"])
-                progress_callback.emit({follow["user_login"]: follow["user_id"] for follow in response["data"]})
+                progress_callback.emit({response_element["user_login"]: response_element["user_id"] for response_element in response["data"]})
                 page = response["pagination"]
         except Exception as e:
             print(e)

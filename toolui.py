@@ -102,14 +102,19 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.following_tab = QtWidgets.QWidget()
         self.user_info_tab = QtWidgets.QWidget()
         self.blocklist_info_tab = QtWidgets.QTabWidget()
+        self.banlist_info_tab = QtWidgets.QTabWidget()
+
 
         self.tool_tab_widget.addTab(self.following_tab, "Following")
         self.tool_tab_widget.addTab(self.user_info_tab, "User Info")
         self.tool_tab_widget.addTab(self.blocklist_info_tab, "Blocklist Info")
+        self.tool_tab_widget.addTab(self.banlist_info_tab, "Banlist Info")
+
 
         self.init_follow_grabber(self.following_tab)
         self.init_user_info(self.user_info_tab)
         self.init_blocklist_info(self.blocklist_info_tab)
+        self.init_banlist_info(self.banlist_info_tab)
 
         self.status_label = QtWidgets.QLabel()
         self.status_label.setText("")
