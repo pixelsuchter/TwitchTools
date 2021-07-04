@@ -1,4 +1,5 @@
 import json
+import time
 from pprint import pprint
 from typing import Union, List
 
@@ -6,6 +7,7 @@ import twitch
 import twitchAPI
 from twitchAPI import UserAuthenticator
 from threading import Lock
+import twitchchat
 
 
 class Twitch_api:
@@ -33,6 +35,8 @@ class Twitch_api:
 
         self.twitch_legacy = twitch.TwitchClient(client_id=credentials["client id"], oauth_token=credentials["oauth token"])
 
+        self.bot = twitchchat.Bot(token=f"oauth:{credentials['oauth token']}", client_id=self.own_id, nickname="pixelsuchter", command_prefix="!", channels_to_join=["pixelsuchter"])
+
     def names_to_id(self, names: Union[List, str]):
         with self.api_lock:
             response = self.twitch_legacy.users.translate_usernames_to_ids(names)
@@ -59,13 +63,31 @@ class Twitch_api:
 
     def get_all_blocked_users(self, progress_callback):
         try:
-            response = self.twitch_helix.get_user_block_list(broadcaster_id=self.own_id, first=100)
+            with self.api_lock:
+                response = self.twitch_helix.get_user_block_list(broadcaster_id=self.own_id, first=100)
             progress_callback.emit({response_element["user_login"]: response_element["user_id"] for response_element in response["data"]})
             page = response["pagination"]
-            while response["pagination"]:
+            while page:
                 with self.api_lock:
                     response = self.twitch_helix.get_user_block_list(broadcaster_id=self.own_id, first=100, after=page["cursor"])
                 progress_callback.emit({response_element["user_login"]: response_element["user_id"] for response_element in response["data"]})
                 page = response["pagination"]
+        except Exception as e:
+            print(e)
+
+    def get_banned_users(self, progress_callback):
+        try:
+            with self.api_lock:
+                response = self.twitch_helix.get_banned_users(broadcaster_id=self.own_id, first=100)
+                print(response)
+            progress_callback.emit([[response_element["user_login"], response_element["user_id"], response_element["expires_at"]] for response_element in response["data"]])
+            page = response["pagination"]
+            while page:
+                with self.api_lock:
+                    response = self.twitch_helix.get_banned_users(broadcaster_id=self.own_id, first=100, after=page["cursor"])
+                    print(response)
+                progress_callback.emit([[response_element["user_login"], response_element["user_id"], response_element["expires_at"]] for response_element in response["data"]])
+                page = response["pagination"]
+                time.sleep(1)
         except Exception as e:
             print(e)

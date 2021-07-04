@@ -14,7 +14,6 @@ from PySide6.QtWidgets import *
 import twitchapi
 
 
-
 # <editor-fold desc="Multithread worker">
 class WorkerSignals(QObject):
     """
@@ -104,12 +103,10 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.blocklist_info_tab = QtWidgets.QTabWidget()
         self.banlist_info_tab = QtWidgets.QTabWidget()
 
-
         self.tool_tab_widget.addTab(self.following_tab, "Following")
         self.tool_tab_widget.addTab(self.user_info_tab, "User Info")
         self.tool_tab_widget.addTab(self.blocklist_info_tab, "Blocklist Info")
         self.tool_tab_widget.addTab(self.banlist_info_tab, "Banlist Info")
-
 
         self.init_follow_grabber(self.following_tab)
         self.init_user_info(self.user_info_tab)
@@ -125,6 +122,9 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.setLayout(layout)
 
         self.api = twitchapi.Twitch_api()
+        self.bot_worker = Worker(self.api.bot.run)
+        self.bot_worker.signals.progress.connect(self.print_output)
+        self.threadpool.start(self.bot_worker)
 
     def print_output(self, s):
         print(s)
@@ -203,7 +203,6 @@ class TwitchToolUi(QtWidgets.QWidget):
             self.follow_grabber_follow_Table.sortByColumn(1, Qt.AscendingOrder)
         else:
             self.add_status("Error in follow grabber")
-
 
     # <editor-fold desc="Follow grabber button action">
     def follow_grabber_get_follows_button_action(self):
@@ -335,4 +334,47 @@ class TwitchToolUi(QtWidgets.QWidget):
     def blocklist_get_blocklist_Button_done(self):
         self.remove_status("Grabbing blocklist, please wait")
         self.blocklist_get_blocklist_Button.setEnabled(True)
+
     # </editor-fold>
+
+    def init_banlist_info(self, parent):
+        # Create Widgets
+        self.banlist_get_banlist_Button = QPushButton("Get Banlist")
+        self.banlist_info_Table = QTableWidget()
+        self.banlist_info_Table.setColumnCount(3)
+        self.banlist_info_Table.setHorizontalHeaderItem(0, QTableWidgetItem("User Name"))
+        self.banlist_info_Table.setHorizontalHeaderItem(1, QTableWidgetItem("User ID"))
+        self.banlist_info_Table.setHorizontalHeaderItem(2, QTableWidgetItem("Expires At"))
+
+        # Create layout and add widgets
+        layout = QVBoxLayout()
+        layout.addWidget(self.banlist_get_banlist_Button)
+        layout.addWidget(self.banlist_info_Table)
+
+        # Set dialog layout
+        parent.setLayout(layout)
+
+        # Add actions
+        self.banlist_get_banlist_Button.clicked.connect(self.banlist_get_banlist_Button_action)
+
+    def banlist_get_banlist_Button_action(self):
+        self.banlist_get_banlist_Button.setEnabled(False)
+        self.add_status("Grabbing banlist, please wait")
+        self.banlist_info_Table.clearContents()
+        self.banlist_info_Table.setRowCount(0)
+        worker = Worker(self.api.get_banned_users)
+        worker.signals.progress.connect(self.banlist_get_banlist_Button_progress)
+        worker.signals.result.connect(self.banlist_get_banlist_Button_done)
+        self.threadpool.start(worker)
+
+    def banlist_get_banlist_Button_progress(self, banlist):
+        row_count = self.banlist_info_Table.rowCount()
+        self.banlist_info_Table.setRowCount(row_count + len(banlist))
+        for row, line in enumerate(banlist):
+            for col, entry in enumerate(line):
+                self.banlist_info_Table.setItem(row + row_count, col, QTableWidgetItem(QIcon(), str(entry)))
+
+    def banlist_get_banlist_Button_done(self):
+        self.banlist_info_Table.sortByColumn(0, Qt.AscendingOrder)
+        self.remove_status("Grabbing banlist, please wait")
+        self.banlist_get_banlist_Button.setEnabled(True)
