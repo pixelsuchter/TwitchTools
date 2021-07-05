@@ -12,10 +12,10 @@ class Bot(commands.Bot):
     # Events don't need decorators when subclassed
     async def event_ready(self):
         print(f'Ready | {self.nick}')
-        self.progress_callback.emit("hallo")
+        self.progress_callback.emit("hello")
 
     async def event_message(self, message):
-        print(message.timestamp, message.author, message.content)
+        self.progress_callback.emit((message.timestamp, message.author, message.content))
         await self.handle_commands(message)
 
     # Commands use a decorator...

@@ -1,4 +1,5 @@
 import json
+import os
 import time
 from pprint import pprint
 from typing import Union, List
@@ -12,12 +13,24 @@ import twitchchat
 
 class Twitch_api:
     def __init__(self):
+        # Default credentials
+        credentials = {"client id": "", "app secret": "", "oauth token": "", "refresh token": "", "bot nickname": "", "bot command prefix": "!", "bot channels": [""]}
+
+        try:
+            with open("credentials.json", "r") as credentials_file:
+                _credentials = json.load(credentials_file)
+                assert _credentials.keys() == credentials.keys()
+                credentials = _credentials
+        except (OSError, AssertionError):
+            os.rename("credentials.json", "credentials.json.broken")
+            with open("credentials.json", "w") as credentials_file:
+                print("Credentials file corrupt, generated new")
+                json.dump(credentials, credentials_file, indent="  ")
+            exit(-1)
+
         self.api_lock = Lock()
         scopes = [twitchAPI.AuthScope.USER_EDIT, twitchAPI.AuthScope.MODERATION_READ, twitchAPI.AuthScope.CHANNEL_READ_REDEMPTIONS, twitchAPI.AuthScope.CHAT_READ,
                   twitchAPI.AuthScope.USER_READ_BLOCKED_USERS]
-
-        with open("credentials.json", "r") as credentials_file:
-            credentials = json.load(credentials_file)
 
         self.twitch_helix = twitchAPI.Twitch(app_id=credentials["client id"], app_secret=credentials["app secret"], target_app_auth_scope=scopes)
         self.twitch_helix.authenticate_app(scopes)
@@ -35,7 +48,8 @@ class Twitch_api:
 
         self.twitch_legacy = twitch.TwitchClient(client_id=credentials["client id"], oauth_token=credentials["oauth token"])
 
-        self.bot = twitchchat.Bot(token=f"oauth:{credentials['oauth token']}", client_id=self.own_id, nickname="pixelsuchter", command_prefix="!", channels_to_join=["pixelsuchter"])
+        self.bot = twitchchat.Bot(token=f"oauth:{credentials['oauth token']}", client_id=self.own_id, nickname=credentials["bot nickname"],
+                                  command_prefix=credentials["bot command prefix"], channels_to_join=credentials["bot channels"])
 
     def names_to_id(self, names: Union[List, str]):
         with self.api_lock:

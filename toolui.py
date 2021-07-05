@@ -218,6 +218,8 @@ class TwitchToolUi(QtWidgets.QWidget):
                 worker.signals.progress.connect(self.follow_grabber_get_follows_button_thread_return)
                 worker.signals.result.connect(self.follow_grabber_get_follows_button_thread_done)
                 self.threadpool.start(worker)
+        else:
+            self.follow_grabber_get_follows_button_thread_done()
 
     def follow_grabber_get_follows_button_thread_return(self, follows):
         row_count = self.follow_grabber_follow_Table.rowCount()
@@ -276,6 +278,8 @@ class TwitchToolUi(QtWidgets.QWidget):
                     self.user_info_get_info_button_progress(None)
             else:
                 self.user_info_get_info_button_progress(None)
+        else:
+            self.user_info_get_info_button_done()
 
     def user_info_get_info_button_progress(self, user_info):
         if user_info:
