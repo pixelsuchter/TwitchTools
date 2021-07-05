@@ -313,19 +313,20 @@ class WebsocketConnection:
             raise asyncio.TimeoutError(
                 f'Request to leave the channel "{channel}" has timed out.')
 
-    async def _listen(self):
+    async def _listen(self, run_flag):
         backoff = ExponentialBackoff()
 
         if not self.is_connected and self._last_exec:
             raise WSConnectionFailure(f'Websocket connection failure:\n\n{self._last_exec}')
 
-        while True:
+        while True in run_flag:
+            print(run_flag)
             if self._authentication_error:
                 log.error('AUTHENTICATION ERROR:: Incorrect IRC Token passed.')
                 raise AuthenticationError
 
             try:
-                data = await self._websocket.recv()
+                data = await asyncio.wait_for(self._websocket.recv(), 5)
             except websockets.ConnectionClosed:
                 retry = backoff.delay()
                 log.info('Websocket closed: Retrying connection in %s seconds...', retry)
@@ -333,11 +334,15 @@ class WebsocketConnection:
                 await asyncio.sleep(retry)
                 await self._connect()
                 continue
+            except asyncio.exceptions.TimeoutError:
+                continue
 
             await self._dispatch('raw_data', data)
 
             _task = self.loop.create_task(self.process_data(data))
             _task.add_done_callback(functools.partial(self._task_callback, data))
+        self.teardown()
+        await asyncio.wait_for(self._websocket.close(), 10)
 
     def _task_callback(self, data, task):
         exc = task.exception()

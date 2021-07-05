@@ -289,7 +289,7 @@ class Bot(Client):
 
         self._checks.remove(func)
 
-    def run(self, progress_callback):
+    def run(self, progress_callback, run_flag):
         """A blocking call that initializes the IRC Bot event loop.
 
         This should be the last function to be called.
@@ -306,13 +306,13 @@ class Bot(Client):
         loop.run_until_complete(self._ws._connect())
 
         try:
-            loop.run_until_complete(self._ws._listen())
+            loop.run_until_complete(self._ws._listen(run_flag))
         except KeyboardInterrupt:
             pass
         finally:
             self._ws.teardown()
 
-    async def start(self):
+    async def start(self, run):
         """|coro|
 
         An asynchronous call which starts the IRC Bot event loop.
@@ -326,7 +326,7 @@ class Bot(Client):
         await self._ws._connect()
 
         try:
-            await self._ws._listen()
+            await self._ws._listen(run)
         except KeyboardInterrupt:
             pass
         finally:

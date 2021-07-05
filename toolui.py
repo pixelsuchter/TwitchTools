@@ -83,12 +83,15 @@ class Worker(QRunnable):
             self.signals.result.emit(result)  # Return the result of the processing
         finally:
             self.signals.finished.emit()  # Done
+
+
 # </editor-fold>
 
 
 class TwitchToolUi(QtWidgets.QWidget):
     def __init__(self, settings):
         super(TwitchToolUi, self).__init__()
+        self.run_bot = [True]
         self.old_settings = settings.copy()
         self.settings = settings
 
@@ -122,9 +125,11 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.setLayout(layout)
 
         self.api = twitchapi.Twitch_api()
-        self.bot_worker = Worker(self.api.bot.run)
+        self.bot_worker = Worker(self.api.bot.run, run_flag=self.run_bot)
         self.bot_worker.signals.progress.connect(self.print_output)
         self.threadpool.start(self.bot_worker)
+
+        print(self.threadpool.children())
 
     def print_output(self, s):
         print(s)
@@ -137,6 +142,7 @@ class TwitchToolUi(QtWidgets.QWidget):
             with open("settings.json", "w") as settings_file:
                 json.dump(self.settings, settings_file, indent="  ")
                 print("Settings saved")
+        self.run_bot.remove(True)
 
     # <editor-fold desc="Status bar">
     def add_status(self, status: str):
@@ -341,6 +347,7 @@ class TwitchToolUi(QtWidgets.QWidget):
 
     # </editor-fold>
 
+    # <editor-fold desc="Banlist tab">
     def init_banlist_info(self, parent):
         # Create Widgets
         self.banlist_get_banlist_Button = QPushButton("Get Banlist")
@@ -382,3 +389,4 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.banlist_info_Table.sortByColumn(0, Qt.AscendingOrder)
         self.remove_status("Grabbing banlist, please wait")
         self.banlist_get_banlist_Button.setEnabled(True)
+    # </editor-fold>
