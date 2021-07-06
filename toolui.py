@@ -106,18 +106,23 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.blocklist_info_tab = QtWidgets.QTabWidget()
         self.banlist_info_tab = QtWidgets.QTabWidget()
         self.mod_actions_tab = QtWidgets.QTabWidget()
+        self.settings_tab = QtWidgets.QTabWidget()
 
         self.tool_tab_widget.addTab(self.following_tab, "Following")
         self.tool_tab_widget.addTab(self.user_info_tab, "User Info")
         self.tool_tab_widget.addTab(self.blocklist_info_tab, "Blocklist Info")
         self.tool_tab_widget.addTab(self.banlist_info_tab, "Banlist Info")
         self.tool_tab_widget.addTab(self.mod_actions_tab, "Moderator Actions")
+        self.tool_tab_widget.addTab(self.settings_tab, "Settings")
 
         self.init_follow_grabber(self.following_tab)
         self.init_user_info(self.user_info_tab)
         self.init_blocklist_info(self.blocklist_info_tab)
         self.init_banlist_info(self.banlist_info_tab)
         self.init_mod_actions_tab(self.mod_actions_tab)
+        self.init_settings_tab(self.settings_tab)
+
+        self.tool_tab_widget.currentChanged.connect(self.tab_clicked)
 
         self.status_label = QtWidgets.QLabel()
         self.status_label.setText("")
@@ -138,13 +143,21 @@ class TwitchToolUi(QtWidgets.QWidget):
 
         print(self.threadpool.children())
 
+    def tab_clicked(self):
+        if self.tool_tab_widget.currentWidget() is self.settings_tab:
+            # Update settings
+            self.settings["Window Size"] = [self.size().width(), self.size().height()]
+            self.settings["Maximized"] = self.isMaximized()
+
+            # Update labels
+            self.settings_window_width_LineEdit.setText(str(self.settings["Window Size"][0]))
+            self.settings_window_height_LineEdit.setText(str(self.settings["Window Size"][1]))
+
     def print_output(self, s):
-        print(s)
+        # print(s)
+        pass
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
-        self.settings["Window Size"] = [self.size().width(), self.size().height()]
-        self.settings["Maximized"] = self.isMaximized()
-
         if not (self.settings == self.old_settings):
             with open("settings.json", "w") as settings_file:
                 json.dump(self.settings, settings_file, indent="  ")
@@ -400,8 +413,13 @@ class TwitchToolUi(QtWidgets.QWidget):
 
     # </editor-fold>
 
+    # <editor-fold desc="Mod actions tab">
     def init_mod_actions_tab(self, parent):
         # Create Widgets
+        self.modactions_export_all_Button = QPushButton("Export All")
+        self.modactions_export_bans_Button = QPushButton("Export Bans")
+        self.modactions_auto_export_all_checkbox = QCheckBox("Auto Export All")
+        self.modactions_auto_export_bans_checkbox = QCheckBox("Auto Export Bans")
         self.mod_actions_Table = QTableWidget()
         self.mod_actions_Table.setColumnCount(4)
         self.mod_actions_Table.setHorizontalHeaderItem(0, QTableWidgetItem("User"))
@@ -410,11 +428,20 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.mod_actions_Table.setHorizontalHeaderItem(3, QTableWidgetItem("Timestamp"))
 
         # Create layout and add widgets
+        button_row_layout = QHBoxLayout()
+        button_row_layout.addWidget(self.modactions_export_all_Button)
+        button_row_layout.addWidget(self.modactions_export_bans_Button)
+        button_row_layout.addWidget(self.modactions_auto_export_all_checkbox)
+        button_row_layout.addWidget(self.modactions_auto_export_bans_checkbox)
+
         layout = QVBoxLayout()
+        layout.addLayout(button_row_layout)
         layout.addWidget(self.mod_actions_Table)
 
         # Set dialog layout
         parent.setLayout(layout)
+
+        self.modactions_auto_export_bans_checkbox.stateChanged.connect(self.checkbox_event)
 
     def pubsub_mod_action_handler(self, response):
         uuid, action = response
@@ -425,3 +452,39 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.mod_actions_Table.setItem(0, 2, QTableWidgetItem(data["created_by"]))
         self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(str(data["created_at"])))
         self.mod_actions_Table.resizeColumnsToContents()
+
+    def checkbox_event(self, *args, **kwargs):
+        print("checked")
+        print(args, kwargs)
+
+    # </editor-fold>
+
+    # <editor-fold desc="Settings tab">
+    def init_settings_tab(self, parent):
+        # Create Widgets
+        int_validator = QtGui.QIntValidator()
+        self.settings_apply_button = QPushButton("Apply")
+        self.settings_window_width_LineEdit = QLineEdit(str(self.settings["Window Size"][0]))
+        self.settings_window_width_LineEdit.setValidator(int_validator)
+        self.settings_window_height_LineEdit = QLineEdit(str(self.settings["Window Size"][1]))
+        self.settings_window_height_LineEdit.setValidator(int_validator)
+
+        # Create layout and add widgets
+        layout = QFormLayout()
+        layout.addRow(self.settings_apply_button)
+        layout.addRow("Window width", self.settings_window_width_LineEdit)
+        layout.addRow("Window height", self.settings_window_height_LineEdit)
+
+        # Set dialog layout
+        parent.setLayout(layout)
+
+        self.settings_apply_button.clicked.connect(self.settings_apply_callback)
+
+    def settings_apply_callback(self):
+        self.settings["Window Size"] = (int(self.settings_window_width_LineEdit.text()), int(self.settings_window_height_LineEdit.text()))
+
+        if not (self.settings == self.old_settings):
+            with open("settings.json", "w") as settings_file:
+                json.dump(self.settings, settings_file, indent="  ")
+                print("Settings saved")
+    # </editor-fold>
