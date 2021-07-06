@@ -9,6 +9,7 @@ import twitchAPI
 from twitchAPI import UserAuthenticator
 from threading import Lock
 import twitchchat
+from functools import partial
 
 
 class Twitch_api:
@@ -29,8 +30,8 @@ class Twitch_api:
             exit(-1)
 
         self.api_lock = Lock()
-        scopes = [twitchAPI.AuthScope.USER_EDIT, twitchAPI.AuthScope.MODERATION_READ, twitchAPI.AuthScope.CHANNEL_READ_REDEMPTIONS, twitchAPI.AuthScope.CHAT_READ,
-                  twitchAPI.AuthScope.USER_READ_BLOCKED_USERS]
+        scopes = [twitchAPI.AuthScope.USER_EDIT, twitchAPI.AuthScope.MODERATION_READ, twitchAPI.AuthScope.CHANNEL_MODERATE, twitchAPI.AuthScope.CHANNEL_READ_REDEMPTIONS,
+                  twitchAPI.AuthScope.CHAT_READ, twitchAPI.AuthScope.USER_READ_BLOCKED_USERS]
 
         self.twitch_helix = twitchAPI.Twitch(app_id=credentials["client id"], app_secret=credentials["app secret"], target_app_auth_scope=scopes)
         self.twitch_helix.authenticate_app(scopes)
@@ -51,11 +52,20 @@ class Twitch_api:
         self.bot = twitchchat.Bot(token=f"oauth:{credentials['oauth token']}", client_id=self.own_id, nickname=credentials["bot nickname"],
                                   command_prefix=credentials["bot command prefix"], channels_to_join=credentials["bot channels"])
 
+        self.pubsub = twitchAPI.pubsub.PubSub(self.twitch_helix)
+
+
+    # <editor-fold desc="TwitchAPI Section">
     def names_to_id(self, names: Union[List, str]):
         with self.api_lock:
             response = self.twitch_legacy.users.translate_usernames_to_ids(names)
         ids = [user["id"] for user in response]
         return ids
+
+    def id_to_name(self, user_id):
+        with self.api_lock:
+            response = self.twitch_helix.get_users(user_ids=[user_id])
+        return response["data"][0]["login"]
 
     def get_all_followed_channel_names(self, user_id, progress_callback):
         with self.api_lock:
@@ -105,3 +115,17 @@ class Twitch_api:
                 time.sleep(1)
         except Exception as e:
             print(e)
+
+    # </editor-fold>
+
+    # <editor-fold desc="Pubsub Section">
+    def init_pubsub(self, progress_callback):
+        mod_actions_callback = partial(self.pubsub_mod_actions_callback, progress_callback)
+        self.pubsub.listen_chat_moderator_actions(self.own_id, self.own_id, mod_actions_callback)
+
+        self.pubsub.start()
+
+
+    def pubsub_mod_actions_callback(self, mod_action_signal, *args):
+        mod_action_signal.emit(args)
+    # </editor-fold>

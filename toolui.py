@@ -105,16 +105,19 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.user_info_tab = QtWidgets.QWidget()
         self.blocklist_info_tab = QtWidgets.QTabWidget()
         self.banlist_info_tab = QtWidgets.QTabWidget()
+        self.mod_actions_tab = QtWidgets.QTabWidget()
 
         self.tool_tab_widget.addTab(self.following_tab, "Following")
         self.tool_tab_widget.addTab(self.user_info_tab, "User Info")
         self.tool_tab_widget.addTab(self.blocklist_info_tab, "Blocklist Info")
         self.tool_tab_widget.addTab(self.banlist_info_tab, "Banlist Info")
+        self.tool_tab_widget.addTab(self.mod_actions_tab, "Moderator Actions")
 
         self.init_follow_grabber(self.following_tab)
         self.init_user_info(self.user_info_tab)
         self.init_blocklist_info(self.blocklist_info_tab)
         self.init_banlist_info(self.banlist_info_tab)
+        self.init_mod_actions_tab(self.mod_actions_tab)
 
         self.status_label = QtWidgets.QLabel()
         self.status_label.setText("")
@@ -128,6 +131,10 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.bot_worker = Worker(self.api.bot.run, run_flag=self.run_bot)
         self.bot_worker.signals.progress.connect(self.print_output)
         self.threadpool.start(self.bot_worker)
+
+        self.pubsub_worker = Worker(self.api.init_pubsub)
+        self.pubsub_worker.signals.progress.connect(self.pubsub_mod_action_handler)
+        self.threadpool.start(self.pubsub_worker)
 
         print(self.threadpool.children())
 
@@ -143,6 +150,7 @@ class TwitchToolUi(QtWidgets.QWidget):
                 json.dump(self.settings, settings_file, indent="  ")
                 print("Settings saved")
         self.run_bot.remove(True)
+        self.api.pubsub.stop()
 
     # <editor-fold desc="Status bar">
     def add_status(self, status: str):
@@ -389,4 +397,31 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.banlist_info_Table.sortByColumn(0, Qt.AscendingOrder)
         self.remove_status("Grabbing banlist, please wait")
         self.banlist_get_banlist_Button.setEnabled(True)
+
     # </editor-fold>
+
+    def init_mod_actions_tab(self, parent):
+        # Create Widgets
+        self.mod_actions_Table = QTableWidget()
+        self.mod_actions_Table.setColumnCount(4)
+        self.mod_actions_Table.setHorizontalHeaderItem(0, QTableWidgetItem("User"))
+        self.mod_actions_Table.setHorizontalHeaderItem(1, QTableWidgetItem("Action"))
+        self.mod_actions_Table.setHorizontalHeaderItem(2, QTableWidgetItem("Moderator"))
+        self.mod_actions_Table.setHorizontalHeaderItem(3, QTableWidgetItem("Timestamp"))
+
+        # Create layout and add widgets
+        layout = QVBoxLayout()
+        layout.addWidget(self.mod_actions_Table)
+
+        # Set dialog layout
+        parent.setLayout(layout)
+
+    def pubsub_mod_action_handler(self, response):
+        uuid, action = response
+        data = action["data"]
+        self.mod_actions_Table.insertRow(0)
+        self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(self.api.id_to_name(data["target_user_id"])))
+        self.mod_actions_Table.setItem(0, 1, QTableWidgetItem(data["moderation_action"]))
+        self.mod_actions_Table.setItem(0, 2, QTableWidgetItem(data["created_by"]))
+        self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(str(data["created_at"])))
+        self.mod_actions_Table.resizeColumnsToContents()
