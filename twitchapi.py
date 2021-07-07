@@ -68,7 +68,10 @@ class Twitch_api:
     def id_to_name(self, user_id):
         with self.api_lock:
             response = self.twitch_helix.get_users(user_ids=[user_id])
-        return response["data"][0]["login"]
+        if response["data"]:
+            return response["data"][0]["login"]
+        else:
+            return ""
 
     def get_all_followed_channel_names(self, user_id, progress_callback):
         with self.api_lock:
