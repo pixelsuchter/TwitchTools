@@ -1,4 +1,6 @@
+import datetime
 import json
+import os.path
 import random
 import sys
 import threading
@@ -115,13 +117,6 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.tool_tab_widget.addTab(self.mod_actions_tab, "Moderator Actions")
         self.tool_tab_widget.addTab(self.settings_tab, "Settings")
 
-        self.init_follow_grabber(self.following_tab)
-        self.init_user_info(self.user_info_tab)
-        self.init_blocklist_info(self.blocklist_info_tab)
-        self.init_banlist_info(self.banlist_info_tab)
-        self.init_mod_actions_tab(self.mod_actions_tab)
-        self.init_settings_tab(self.settings_tab)
-
         self.tool_tab_widget.currentChanged.connect(self.tab_clicked)
 
         self.status_label = QtWidgets.QLabel()
@@ -141,7 +136,12 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.pubsub_worker.signals.progress.connect(self.pubsub_mod_action_handler)
         self.threadpool.start(self.pubsub_worker)
 
-        print(self.threadpool.children())
+        self.init_follow_grabber(self.following_tab)
+        self.init_user_info(self.user_info_tab)
+        self.init_blocklist_info(self.blocklist_info_tab)
+        self.init_banlist_info(self.banlist_info_tab)
+        self.init_mod_actions_tab(self.mod_actions_tab)
+        self.init_settings_tab(self.settings_tab)
 
     def tab_clicked(self):
         if self.tool_tab_widget.currentWidget() is self.settings_tab:
@@ -441,13 +441,18 @@ class TwitchToolUi(QtWidgets.QWidget):
         # Set dialog layout
         parent.setLayout(layout)
 
+        self.modactions_export_all_Button.clicked.connect(self.export_all_modactions)
+        self.modactions_export_bans_Button.clicked.connect(self.export_bans)
         self.modactions_auto_export_bans_checkbox.stateChanged.connect(self.checkbox_event)
 
     def pubsub_mod_action_handler(self, response):
         uuid, action = response
         data = action["data"]
         self.mod_actions_Table.insertRow(0)
-        self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(self.api.id_to_name(data["target_user_id"])))
+        if data["moderation_action"] in ("ban", "unban"):
+            self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(self.api.id_to_name(data["target_user_id"])))
+        else:
+            self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(""))
         self.mod_actions_Table.setItem(0, 1, QTableWidgetItem(data["moderation_action"]))
         self.mod_actions_Table.setItem(0, 2, QTableWidgetItem(data["created_by"]))
         self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(str(data["created_at"])))
@@ -456,6 +461,89 @@ class TwitchToolUi(QtWidgets.QWidget):
     def checkbox_event(self, *args, **kwargs):
         print("checked")
         print(args, kwargs)
+
+    def export_all_modactions(self):
+        row_count = self.mod_actions_Table.rowCount()
+        column_count = self.mod_actions_Table.columnCount()
+        lines = []
+        for i in range(row_count):
+            row = []
+            for j in range(column_count):
+                row.append(self.mod_actions_Table.item(i, j).text())
+            lines.append(row)
+        csv_lines = [",".join(line) for line in lines]
+        csv_string = "\n".join(csv_lines)
+
+        output_filepath = f'{self.settings["Export Directory"]}Modactions_all_{datetime.date.today()}.csv'
+        if not os.path.isdir(self.settings["Export Directory"]):
+            os.mkdir(self.settings["Export Directory"])
+        if os.path.isfile(output_filepath):
+            with open(output_filepath, "r") as output_file:
+                old_lines = [line.strip() for line in output_file.readlines()]
+                for line in csv_lines.copy():
+                    if line in old_lines:
+                        csv_lines.remove(line)
+            if csv_lines:
+                with open(output_filepath, "a") as output_file:
+                    output_file.write("\n".join(csv_lines))
+                    output_file.write("\n")
+        else:
+            with open(output_filepath, "x") as output_file:
+                output_file.write("User,Action,Moderator,Timestamp\n")
+                if csv_string:
+                    output_file.write(csv_string)
+                    output_file.write("\n")
+
+    def export_bans(self):
+        row_count = self.mod_actions_Table.rowCount()
+        column_count = self.mod_actions_Table.columnCount()
+        lines = []
+        for i in range(row_count):
+            row = []
+            for j in range(column_count):
+                row.append(self.mod_actions_Table.item(i, j).text())
+            lines.append(row)
+
+        ban_events = {}
+        unban_events = {}
+        for line in lines:
+            if line[1] == "ban":
+                ban_events[line[0]] = line[1:]
+            elif line[1] == "unban":
+                unban_events[line[0]] = line[1:]
+
+        for name, data in unban_events.items():
+            if name in ban_events.keys():
+                if data[2] > ban_events[name][2]:
+                    ban_events.pop(name)
+
+        filtered_lines = []
+        for name, data in ban_events.items():
+            filtered_lines.append([name, *data])
+        filtered_lines.sort(key=lambda x: x[3])  # sort by time
+
+        csv_lines = [",".join(line) for line in filtered_lines]
+        csv_string = "\n".join(csv_lines)
+
+        output_filepath = f'{self.settings["Export Directory"]}Modactions_bans_{datetime.date.today()}.csv'
+        if not os.path.isdir(self.settings["Export Directory"]):
+            os.mkdir(self.settings["Export Directory"])
+        if os.path.isfile(output_filepath):
+            with open(output_filepath, "r") as output_file:
+                old_lines = [line.strip() for line in output_file.readlines()]
+                for line in csv_lines.copy():
+                    if line in old_lines:
+                        csv_lines.remove(line)
+            if csv_lines:
+                with open(output_filepath, "a") as output_file:
+                    output_file.write("\n".join(csv_lines))
+                    output_file.write("\n")
+        else:
+            with open(output_filepath, "x") as output_file:
+                output_file.write("User,Action,Moderator,Timestamp\n")
+                if csv_string:
+                    output_file.write(csv_string)
+                    output_file.write("\n")
 
     # </editor-fold>
 
@@ -468,12 +556,16 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.settings_window_width_LineEdit.setValidator(int_validator)
         self.settings_window_height_LineEdit = QLineEdit(str(self.settings["Window Size"][1]))
         self.settings_window_height_LineEdit.setValidator(int_validator)
+        self.settings_export_dir_lineEdit = QLineEdit(str(self.settings["Export Directory"]))
+        self.credentials_channels_to_join_LineEdit = QLineEdit(", ".join(self.api.credentials["bot channels"]))
 
         # Create layout and add widgets
         layout = QFormLayout()
         layout.addRow(self.settings_apply_button)
         layout.addRow("Window width", self.settings_window_width_LineEdit)
         layout.addRow("Window height", self.settings_window_height_LineEdit)
+        layout.addRow("Export Directory", self.settings_export_dir_lineEdit)
+        layout.addRow("Mod Action Channels", self.credentials_channels_to_join_LineEdit)
 
         # Set dialog layout
         parent.setLayout(layout)
@@ -481,10 +573,24 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.settings_apply_button.clicked.connect(self.settings_apply_callback)
 
     def settings_apply_callback(self):
-        self.settings["Window Size"] = (int(self.settings_window_width_LineEdit.text()), int(self.settings_window_height_LineEdit.text()))
+        changed = False
+        self.settings["Window Size"] = [int(self.settings_window_width_LineEdit.text()), int(self.settings_window_height_LineEdit.text())]
 
         if not (self.settings == self.old_settings):
             with open("settings.json", "w") as settings_file:
                 json.dump(self.settings, settings_file, indent="  ")
-                print("Settings saved")
+            changed = True
+
+
+        if not ", ".join(self.api.credentials["bot channels"]) == self.credentials_channels_to_join_LineEdit.text():
+            with open("credentials.json", "r") as credentials_file:
+                _credentials = json.load(credentials_file)
+                _credentials["bot channels"] = [channel.strip() for channel in self.credentials_channels_to_join_LineEdit.text().split(",")]
+            with open("credentials.json", "w") as credentials_file:
+                json.dump(_credentials, credentials_file, indent="  ")
+            self.api.load_settings()
+            changed = True
+
+        if changed:
+            print("Settings saved")
     # </editor-fold>
