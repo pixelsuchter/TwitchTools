@@ -16,7 +16,7 @@ def main():
             _settings = json.load(settings_file)
             assert _settings.keys() == settings.keys()
             settings = _settings
-    except (OSError, AssertionError):
+    except (OSError, AssertionError, json.JSONDecodeError):
         with open("settings.json", "w") as settings_file:
             print("Settings file corrupt, generated new")
             settings.update(_settings)
