@@ -14,46 +14,49 @@ from functools import partial
 
 class Twitch_api:
     def __init__(self):
-        # Default credentials
-        credentials = {"client id": "", "app secret": "", "oauth token": "", "refresh token": "", "bot nickname": "", "bot command prefix": "!", "bot channels": [""]}
-
-        try:
-            with open("credentials.json", "r") as credentials_file:
-                _credentials = json.load(credentials_file)
-                assert _credentials.keys() == credentials.keys()
-                credentials = _credentials
-        except (OSError, AssertionError):
-            os.rename("credentials.json", "credentials.json.broken")
-            with open("credentials.json", "w") as credentials_file:
-                print("Credentials file corrupt, generated new")
-                json.dump(credentials, credentials_file, indent="  ")
-            exit(-1)
+        self.credentials = {"client id": "", "app secret": "", "oauth token": "", "refresh token": "", "bot nickname": "", "bot command prefix": "!", "bot channels": [""]}
+        self.load_credentials()
 
         self.api_lock = Lock()
         scopes = [twitchAPI.AuthScope.USER_EDIT, twitchAPI.AuthScope.MODERATION_READ, twitchAPI.AuthScope.CHANNEL_MODERATE, twitchAPI.AuthScope.CHANNEL_READ_REDEMPTIONS,
                   twitchAPI.AuthScope.CHAT_READ, twitchAPI.AuthScope.USER_READ_BLOCKED_USERS]
 
-        self.twitch_helix = twitchAPI.Twitch(app_id=credentials["client id"], app_secret=credentials["app secret"], target_app_auth_scope=scopes)
+        self.twitch_helix = twitchAPI.Twitch(app_id=self.credentials["client id"], app_secret=self.credentials["app secret"], target_app_auth_scope=scopes)
         self.twitch_helix.authenticate_app(scopes)
 
-        token_status = twitchAPI.oauth.validate_token(credentials["oauth token"])
+        token_status = twitchAPI.oauth.validate_token(self.credentials["oauth token"])
         if "login" not in token_status.keys():
             auth = UserAuthenticator(self.twitch_helix, scopes, force_verify=False)
-            credentials["oauth token"], credentials["refresh token"] = auth.authenticate()
+            self.credentials["oauth token"], self.credentials["refresh token"] = auth.authenticate()
             with open("credentials.json", "w") as credentials_file:
-                json.dump(credentials, credentials_file, indent="  ")
-            token_status = twitchAPI.oauth.validate_token(credentials["oauth token"])
+                json.dump(self.credentials, credentials_file, indent="  ")
+            token_status = twitchAPI.oauth.validate_token(self.credentials["oauth token"])
         self.own_id = token_status["user_id"]
 
-        self.twitch_helix.set_user_authentication(credentials["oauth token"], scopes, credentials["refresh token"])
+        self.twitch_helix.set_user_authentication(self.credentials["oauth token"], scopes, self.credentials["refresh token"])
 
-        self.twitch_legacy = twitch.TwitchClient(client_id=credentials["client id"], oauth_token=credentials["oauth token"])
+        self.twitch_legacy = twitch.TwitchClient(client_id=self.credentials["client id"], oauth_token=self.credentials["oauth token"])
 
-        self.bot = twitchchat.Bot(token=f"oauth:{credentials['oauth token']}", client_id=self.own_id, nickname=credentials["bot nickname"],
-                                  command_prefix=credentials["bot command prefix"], channels_to_join=credentials["bot channels"])
+        self.bot = twitchchat.Bot(token=f"oauth:{self.credentials['oauth token']}", client_id=self.own_id, nickname=self.credentials["bot nickname"],
+                                  command_prefix=self.credentials["bot command prefix"], channels_to_join=self.credentials["bot channels"])
 
         self.pubsub = twitchAPI.pubsub.PubSub(self.twitch_helix)
 
+
+    def load_credentials(self):
+        # Default credentials
+        self.credentials = {"client id": "", "app secret": "", "oauth token": "", "refresh token": "", "bot nickname": "", "bot command prefix": "!", "bot channels": [""]}
+
+        try:
+            with open("credentials.json", "r") as credentials_file:
+                _credentials = json.load(credentials_file)
+                assert _credentials.keys() == self.credentials.keys()
+                self.credentials = _credentials
+        except (OSError, AssertionError):
+            with open("credentials.json", "w") as credentials_file:
+                print("Credentials file corrupt, generated new")
+                self.credentials.update(_credentials)
+                json.dump(self.credentials, credentials_file, indent="  ")
 
     # <editor-fold desc="TwitchAPI Section">
     def names_to_id(self, names: Union[List, str]):
@@ -121,7 +124,9 @@ class Twitch_api:
     # <editor-fold desc="Pubsub Section">
     def init_pubsub(self, progress_callback):
         mod_actions_callback = partial(self.pubsub_mod_actions_callback, progress_callback)
-        self.pubsub.listen_chat_moderator_actions(self.own_id, self.own_id, mod_actions_callback)
+        channel_ids = self.names_to_id(self.credentials["bot channels"])
+        for channel in channel_ids:
+            self.pubsub.listen_chat_moderator_actions(self.own_id, channel, mod_actions_callback)
 
         self.pubsub.start()
 
