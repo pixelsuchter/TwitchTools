@@ -9,7 +9,7 @@ import toolui
 
 def main():
     # Default settings
-    settings = {"Style Sheet": "Stylesheets/DarkTheme/DarkTheme.qss", "Window Size": (800, 600), "Maximized": False}
+    settings = {"Style Sheet": "Stylesheets/DarkTheme/DarkTheme.qss", "Window Size": (800, 600), "Maximized": False, "Export Directory": "Exports/"}
 
     try:
         with open("settings.json", "r") as settings_file:
@@ -19,6 +19,7 @@ def main():
     except (OSError, AssertionError):
         with open("settings.json", "w") as settings_file:
             print("Settings file corrupt, generated new")
+            settings.update(_settings)
             json.dump(settings, settings_file, indent="  ")
 
     app = QtWidgets.QApplication([])
