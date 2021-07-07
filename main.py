@@ -10,7 +10,7 @@ import toolui
 def main():
     # Default settings
     settings = {"Style Sheet": "Stylesheets/DarkTheme/DarkTheme.qss", "Window Size": (800, 600), "Maximized": False, "Export Directory": "Exports/"}
-
+    _settings = {}
     try:
         with open("settings.json", "r") as settings_file:
             _settings = json.load(settings_file)
