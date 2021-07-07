@@ -588,7 +588,7 @@ class TwitchToolUi(QtWidgets.QWidget):
                 _credentials["bot channels"] = [channel.strip() for channel in self.credentials_channels_to_join_LineEdit.text().split(",")]
             with open("credentials.json", "w") as credentials_file:
                 json.dump(_credentials, credentials_file, indent="  ")
-            self.api.load_settings()
+            self.api.load_credentials()
             changed = True
 
         if changed:
