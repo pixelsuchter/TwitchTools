@@ -450,7 +450,8 @@ class TwitchToolUi(QtWidgets.QWidget):
         data = action["data"]
         self.mod_actions_Table.insertRow(0)
         if data["moderation_action"] in ("ban", "unban"):
-            self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(self.api.id_to_name(data["target_user_id"])))
+            # self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(self.api.id_to_name(data["target_user_id"])))
+            self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(str(data["target_user_id"])))
         else:
             self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(""))
         self.mod_actions_Table.setItem(0, 1, QTableWidgetItem(data["moderation_action"]))
