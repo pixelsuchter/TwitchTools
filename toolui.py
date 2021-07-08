@@ -472,6 +472,8 @@ class TwitchToolUi(QtWidgets.QWidget):
                 _item = self.mod_actions_Table.item(i, j)
                 if _item:
                     row.append(_item.text())
+                else:
+                    row.append("")
             lines.append(row)
         csv_lines = [",".join(line) for line in lines]
         csv_string = "\n".join(csv_lines)
@@ -506,6 +508,8 @@ class TwitchToolUi(QtWidgets.QWidget):
                 _item = self.mod_actions_Table.item(i, j)
                 if _item:
                     row.append(_item.text())
+                else:
+                    row.append("")
             lines.append(row)
 
         ban_events = {}
