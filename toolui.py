@@ -469,7 +469,9 @@ class TwitchToolUi(QtWidgets.QWidget):
         for i in range(row_count):
             row = []
             for j in range(column_count):
-                row.append(self.mod_actions_Table.item(i, j).text())
+                _item = self.mod_actions_Table.item(i, j)
+                if _item:
+                    row.append(_item.text())
             lines.append(row)
         csv_lines = [",".join(line) for line in lines]
         csv_string = "\n".join(csv_lines)
