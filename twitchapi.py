@@ -2,7 +2,7 @@ import json
 import os
 import time
 from pprint import pprint
-from typing import Union, List
+from typing import Union, List, Iterable
 
 import twitch
 import twitchAPI
@@ -72,6 +72,23 @@ class Twitch_api:
             return response["data"][0]["login"]
         else:
             return ""
+
+    def ids_to_names(self, user_ids: List):
+        namelist = {}
+        if len(user_ids) < 100:
+            with self.api_lock:
+                response = self.twitch_helix.get_users(user_ids=user_ids)
+                namelist.update({user["id"]: user["login"] for user in response["data"]})
+        else:
+            _user_ids = user_ids
+            while len(_user_ids) >= 100:
+                _user_ids_part = _user_ids[:100]
+                with self.api_lock:
+                    response = self.twitch_helix.get_users(user_ids=_user_ids_part)
+                namelist.update({user["id"]: user["login"] for user in response["data"]})
+                _user_ids = _user_ids[100:]
+        return namelist
+
 
     def get_all_followed_channel_names(self, user_id, progress_callback):
         with self.api_lock:

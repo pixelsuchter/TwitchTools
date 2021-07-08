@@ -420,12 +420,16 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.modactions_export_bans_Button = QPushButton("Export Bans")
         self.modactions_auto_export_all_checkbox = QCheckBox("Auto Export All")
         self.modactions_auto_export_bans_checkbox = QCheckBox("Auto Export Bans")
+        self.mod_actions_ids_to_names_Button = QPushButton("Convert ID's to names")
         self.mod_actions_Table = QTableWidget()
-        self.mod_actions_Table.setColumnCount(4)
+        self.mod_actions_Table.setColumnCount(6)
         self.mod_actions_Table.setHorizontalHeaderItem(0, QTableWidgetItem("User"))
-        self.mod_actions_Table.setHorizontalHeaderItem(1, QTableWidgetItem("Action"))
-        self.mod_actions_Table.setHorizontalHeaderItem(2, QTableWidgetItem("Moderator"))
-        self.mod_actions_Table.setHorizontalHeaderItem(3, QTableWidgetItem("Timestamp"))
+        self.mod_actions_Table.setHorizontalHeaderItem(1, QTableWidgetItem("UserID"))
+        self.mod_actions_Table.setHorizontalHeaderItem(2, QTableWidgetItem("Action"))
+        self.mod_actions_Table.setHorizontalHeaderItem(3, QTableWidgetItem("Moderator"))
+        self.mod_actions_Table.setHorizontalHeaderItem(4, QTableWidgetItem("Timestamp"))
+        self.mod_actions_Table.setHorizontalHeaderItem(5, QTableWidgetItem("Reason"))
+
 
         # Create layout and add widgets
         button_row_layout = QHBoxLayout()
@@ -433,6 +437,7 @@ class TwitchToolUi(QtWidgets.QWidget):
         button_row_layout.addWidget(self.modactions_export_bans_Button)
         button_row_layout.addWidget(self.modactions_auto_export_all_checkbox)
         button_row_layout.addWidget(self.modactions_auto_export_bans_checkbox)
+        button_row_layout.addWidget(self.mod_actions_ids_to_names_Button)
 
         layout = QVBoxLayout()
         layout.addLayout(button_row_layout)
@@ -444,19 +449,42 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.modactions_export_all_Button.clicked.connect(self.export_all_modactions)
         self.modactions_export_bans_Button.clicked.connect(self.export_bans)
         self.modactions_auto_export_bans_checkbox.stateChanged.connect(self.checkbox_event)
+        self.mod_actions_ids_to_names_Button.clicked.connect(self.mod_actions_ids_to_names_callback)
+
+    def mod_actions_ids_to_names_callback(self):
+        rowcount = self.mod_actions_Table.rowCount()
+        ids = []
+        for i in range(rowcount):
+            _item = self.mod_actions_Table.item(i, 1)
+            if _item:
+                _text = _item.text()
+                if _text:
+                    ids.append(_text)
+        if ids:
+            name_dict = self.api.ids_to_names(ids)
+            for i in range(self.mod_actions_Table.rowCount()):
+                _item = self.mod_actions_Table.item(i, 1)
+                if _item:
+                    _text = _item.text()
+                    if _text and _text in name_dict.keys():
+                        self.mod_actions_Table.setItem(i, 0, QTableWidgetItem(name_dict[_text]))
+            self.mod_actions_Table.resizeColumnsToContents()
 
     def pubsub_mod_action_handler(self, response):
+        print(response)
         uuid, action = response
         data = action["data"]
         self.mod_actions_Table.insertRow(0)
         if data["moderation_action"] in ("ban", "unban"):
-            # self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(self.api.id_to_name(data["target_user_id"])))
-            self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(str(data["target_user_id"])))
+            self.mod_actions_Table.setItem(0, 1, QTableWidgetItem(str(data["target_user_id"])))
         else:
-            self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(""))
-        self.mod_actions_Table.setItem(0, 1, QTableWidgetItem(data["moderation_action"]))
-        self.mod_actions_Table.setItem(0, 2, QTableWidgetItem(data["created_by"]))
-        self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(str(data["created_at"])))
+            self.mod_actions_Table.setItem(0, 1, QTableWidgetItem(""))
+        self.mod_actions_Table.setItem(0, 2, QTableWidgetItem(data["moderation_action"]))
+        self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(data["created_by"]))
+        self.mod_actions_Table.setItem(0, 4, QTableWidgetItem(str(data["created_at"])))
+        if data["moderation_action"] == "ban":
+            if len(data["args"]) > 1:
+                self.mod_actions_Table.setItem(0, 5, QTableWidgetItem(str(data["args"][1])))
         self.mod_actions_Table.resizeColumnsToContents()
 
     def checkbox_event(self, *args, **kwargs):
@@ -464,6 +492,7 @@ class TwitchToolUi(QtWidgets.QWidget):
         print(args, kwargs)
 
     def export_all_modactions(self):
+        self.mod_actions_ids_to_names_callback()
         row_count = self.mod_actions_Table.rowCount()
         column_count = self.mod_actions_Table.columnCount()
         lines = []
@@ -494,12 +523,13 @@ class TwitchToolUi(QtWidgets.QWidget):
                     output_file.write("\n")
         else:
             with open(output_filepath, "x") as output_file:
-                output_file.write("User,Action,Moderator,Timestamp\n")
+                output_file.write("User,userID,Action,Moderator,Timestamp,Reason\n")
                 if csv_string:
                     output_file.write(csv_string)
                     output_file.write("\n")
 
     def export_bans(self):
+        self.mod_actions_ids_to_names_callback()
         row_count = self.mod_actions_Table.rowCount()
         column_count = self.mod_actions_Table.columnCount()
         lines = []
@@ -549,7 +579,7 @@ class TwitchToolUi(QtWidgets.QWidget):
                     output_file.write("\n")
         else:
             with open(output_filepath, "x") as output_file:
-                output_file.write("User,Action,Moderator,Timestamp\n")
+                output_file.write("User,userID,Action,Moderator,Timestamp,Reason\n")
                 if csv_string:
                     output_file.write(csv_string)
                     output_file.write("\n")
