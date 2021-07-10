@@ -6,6 +6,8 @@ import sys
 import threading
 import time
 import traceback
+import re
+from importlib.metadata import files
 from threading import Thread
 
 from PySide6 import QtWidgets, QtGui, QtCore
@@ -14,6 +16,12 @@ from PySide6.QtGui import Qt, QIcon
 from PySide6.QtWidgets import *
 
 import twitchapi
+
+
+modactions_seperate_file_to_individual_actions_regex = re.compile(r".*\n\n.*\n\n.*\n.*|.*\n\n.*\n.*")
+modactions_get_mod_in_timeout_string_regex = re.compile(r"Timed out by (.*)for (.*) (second|seconds)")
+modactions_get_mod_in_permitted_term_string_regex = re.compile(r"Added as Permitted Term by (\w+)( via AutoMod)?")
+modactions_get_mod_in_blocked_term_string_regex = re.compile(r"Added as Blocked Term by (\w+)( via AutoMod)?")
 
 
 # <editor-fold desc="Multithread worker">
@@ -420,7 +428,8 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.modactions_export_bans_Button = QPushButton("Export Bans")
         self.modactions_auto_export_all_checkbox = QCheckBox("Auto Export All")
         self.modactions_auto_export_bans_checkbox = QCheckBox("Auto Export Bans")
-        self.mod_actions_ids_to_names_Button = QPushButton("Convert ID's to names")
+        self.modactions_ids_to_names_Button = QPushButton("Convert ID's to names")
+        self.modactions_import_button = QPushButton("Import from file")
         self.mod_actions_Table = QTableWidget()
         self.mod_actions_Table.setColumnCount(6)
         self.mod_actions_Table.setHorizontalHeaderItem(0, QTableWidgetItem("User"))
@@ -428,7 +437,7 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.mod_actions_Table.setHorizontalHeaderItem(2, QTableWidgetItem("Action"))
         self.mod_actions_Table.setHorizontalHeaderItem(3, QTableWidgetItem("Moderator"))
         self.mod_actions_Table.setHorizontalHeaderItem(4, QTableWidgetItem("Timestamp"))
-        self.mod_actions_Table.setHorizontalHeaderItem(5, QTableWidgetItem("Reason"))
+        self.mod_actions_Table.setHorizontalHeaderItem(5, QTableWidgetItem("Info"))
 
 
         # Create layout and add widgets
@@ -437,7 +446,8 @@ class TwitchToolUi(QtWidgets.QWidget):
         button_row_layout.addWidget(self.modactions_export_bans_Button)
         button_row_layout.addWidget(self.modactions_auto_export_all_checkbox)
         button_row_layout.addWidget(self.modactions_auto_export_bans_checkbox)
-        button_row_layout.addWidget(self.mod_actions_ids_to_names_Button)
+        button_row_layout.addWidget(self.modactions_ids_to_names_Button)
+        button_row_layout.addWidget(self.modactions_import_button)
 
         layout = QVBoxLayout()
         layout.addLayout(button_row_layout)
@@ -449,9 +459,115 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.modactions_export_all_Button.clicked.connect(self.export_all_modactions)
         self.modactions_export_bans_Button.clicked.connect(self.export_bans)
         self.modactions_auto_export_bans_checkbox.stateChanged.connect(self.checkbox_event)
-        self.mod_actions_ids_to_names_Button.clicked.connect(self.mod_actions_ids_to_names_callback)
+        self.modactions_ids_to_names_Button.clicked.connect(self.modactions_ids_to_names_callback)
+        self.modactions_import_button.clicked.connect(self.modactions_import_callback)
 
-    def mod_actions_ids_to_names_callback(self):
+
+    def modactions_import_callback(self):
+        files_to_read = QFileDialog.getOpenFileNames(caption="Select files to import", dir="", filter="Text files (*.txt)")
+        for file_path in files_to_read[0]:
+            with open(file_path, "rb") as file:
+                file_string = file.read().decode("utf-8").replace("\r\n", "\n")
+            action_list = modactions_seperate_file_to_individual_actions_regex.findall(file_string)
+            for action in action_list:
+                action_parts = [action_part.strip() for action_part in action.split("\n") if action_part]
+                if "Banned by" in action_parts[1]:
+                    _name = action_parts[0]
+                    _moderator = action_parts[1].rsplit(" ", 1)[1]
+                    self.mod_actions_Table.insertRow(0)
+                    self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(_name))
+                    self.mod_actions_Table.setItem(0, 2, QTableWidgetItem("ban"))
+                    self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(_moderator))
+                elif "Timed out by" in action_parts[1]:
+                    _name = action_parts[0]
+                    _moderator = modactions_get_mod_in_timeout_string_regex.search(action_parts[1]).group(1)
+                    self.mod_actions_Table.insertRow(0)
+                    self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(_name))
+                    self.mod_actions_Table.setItem(0, 2, QTableWidgetItem("timeout"))
+                    self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(_moderator))
+                elif "Raid Started by" in action_parts[1]:
+                    _name = action_parts[0]
+                    _moderator = action_parts[1].rsplit(" ", 1)[1]
+                    self.mod_actions_Table.insertRow(0)
+                    self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(_name))
+                    self.mod_actions_Table.setItem(0, 2, QTableWidgetItem("Started Raid"))
+                    self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(_moderator))
+                elif action_parts[0] == "Followers-Only Chat":
+                    _moderator = action_parts[1].rsplit(" ", 1)[1]
+                    _status = action_parts[1].split(" ", 1)[0]
+                    self.mod_actions_Table.insertRow(0)
+                    self.mod_actions_Table.setItem(0, 2, QTableWidgetItem("Follower only Chat"))
+                    self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(_moderator))
+                    self.mod_actions_Table.setItem(0, 5, QTableWidgetItem(_status))
+                elif "Added as a VIP by" in action_parts[1]:
+                    _name = action_parts[0]
+                    _moderator = action_parts[1].rsplit(" ", 1)[1]
+                    self.mod_actions_Table.insertRow(0)
+                    self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(_name))
+                    self.mod_actions_Table.setItem(0, 2, QTableWidgetItem("Added as VIP"))
+                    self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(_moderator))
+                elif "Added as a Moderator by" in action_parts[1]:
+                    _name = action_parts[0]
+                    _moderator = action_parts[1].rsplit(" ", 1)[1]
+                    self.mod_actions_Table.insertRow(0)
+                    self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(_name))
+                    self.mod_actions_Table.setItem(0, 2, QTableWidgetItem("Added as a Moderator"))
+                    self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(_moderator))
+                elif "Hosting Started by" in action_parts[1]:
+                    _name = action_parts[0]
+                    _moderator = action_parts[1].rsplit(" ", 1)[1]
+                    self.mod_actions_Table.insertRow(0)
+                    self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(_name))
+                    self.mod_actions_Table.setItem(0, 2, QTableWidgetItem("Hosting Started"))
+                    self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(_moderator))
+                elif "Hosting Ended by" in action_parts[1]:
+                    _name = action_parts[0]
+                    _moderator = action_parts[1].rsplit(" ", 1)[1]
+                    self.mod_actions_Table.insertRow(0)
+                    self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(_name))
+                    self.mod_actions_Table.setItem(0, 2, QTableWidgetItem("Hosting Ended"))
+                    self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(_moderator))
+                elif "Message Deleted by" in action_parts[1]:
+                    _name = action_parts[0]
+                    _moderator = action_parts[1].rsplit(" ", 1)[1]
+                    self.mod_actions_Table.insertRow(0)
+                    self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(_name))
+                    self.mod_actions_Table.setItem(0, 2, QTableWidgetItem("Message deleted"))
+                    self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(_moderator))
+                    self.mod_actions_Table.setItem(0, 5, QTableWidgetItem(action_parts[2]))
+                elif "Removed Timeout by" in action_parts[1]:
+                    _name = action_parts[0]
+                    _moderator = action_parts[1].rsplit(" ", 1)[1]
+                    self.mod_actions_Table.insertRow(0)
+                    self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(_name))
+                    self.mod_actions_Table.setItem(0, 2, QTableWidgetItem("Removed Timeout"))
+                    self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(_moderator))
+                elif "Added as Permitted Term by" in action_parts[1]:
+                    _moderator = modactions_get_mod_in_permitted_term_string_regex.search(action_parts[1]).group(1)
+                    self.mod_actions_Table.insertRow(0)
+                    self.mod_actions_Table.setItem(0, 2, QTableWidgetItem("Added Permitted Term"))
+                    self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(_moderator))
+                    self.mod_actions_Table.setItem(0, 5, QTableWidgetItem(action_parts[0]))
+                elif "Unban request denied by" in action_parts[1]:
+                    _name = action_parts[0]
+                    _moderator = action_parts[1].rsplit(" ", 1)[1]
+                    self.mod_actions_Table.insertRow(0)
+                    self.mod_actions_Table.setItem(0, 0, QTableWidgetItem(_name))
+                    self.mod_actions_Table.setItem(0, 2, QTableWidgetItem("Denied Unban request"))
+                    self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(_moderator))
+                elif "Added as Blocked Term by" in action_parts[1]:
+                    _moderator = modactions_get_mod_in_blocked_term_string_regex.search(action_parts[1]).group(1)
+                    self.mod_actions_Table.insertRow(0)
+                    self.mod_actions_Table.setItem(0, 2, QTableWidgetItem("Added Blocked Term"))
+                    self.mod_actions_Table.setItem(0, 3, QTableWidgetItem(_moderator))
+                    self.mod_actions_Table.setItem(0, 5, QTableWidgetItem(action_parts[0]))
+                else:
+                    print(action_parts)
+        self.mod_actions_Table.resizeColumnsToContents()
+
+
+
+    def modactions_ids_to_names_callback(self):
         rowcount = self.mod_actions_Table.rowCount()
         ids = []
         for i in range(rowcount):
@@ -492,7 +608,7 @@ class TwitchToolUi(QtWidgets.QWidget):
         print(args, kwargs)
 
     def export_all_modactions(self):
-        self.mod_actions_ids_to_names_callback()
+        self.modactions_ids_to_names_callback()
         row_count = self.mod_actions_Table.rowCount()
         column_count = self.mod_actions_Table.columnCount()
         lines = []
@@ -529,7 +645,7 @@ class TwitchToolUi(QtWidgets.QWidget):
                     output_file.write("\n")
 
     def export_bans(self):
-        self.mod_actions_ids_to_names_callback()
+        self.modactions_ids_to_names_callback()
         row_count = self.mod_actions_Table.rowCount()
         column_count = self.mod_actions_Table.columnCount()
         lines = []
