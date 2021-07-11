@@ -128,12 +128,17 @@ class TwitchToolUi(QtWidgets.QWidget):
 
         self.tool_tab_widget.currentChanged.connect(self.tab_clicked)
 
-        self.status_label = QtWidgets.QLabel()
+        self.status_label = QLabel()
         self.status_label.setText("")
+        self.progess_label = QLabel()
+
+        status_row = QHBoxLayout()
+        status_row.addWidget(self.status_label)
+        status_row.addWidget(self.progess_label)
 
         layout = QVBoxLayout()
         layout.addWidget(self.tool_tab_widget)
-        layout.addWidget(self.status_label)
+        layout.addLayout(status_row)
         self.setLayout(layout)
 
         self.api = twitchapi.Twitch_api()
@@ -165,6 +170,9 @@ class TwitchToolUi(QtWidgets.QWidget):
     def print_output(self, s):
         # print(s)
         pass
+
+    def set_progress_label(self, text):
+        self.progess_label.setText(text)
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         if not (self.settings == self.old_settings):
@@ -410,9 +418,9 @@ class TwitchToolUi(QtWidgets.QWidget):
                 if user_id:
                     blocklist.append(user_id)
         worker = Worker(self.api.ids_to_names, blocklist)
+        worker.signals.progress.connect(self.set_progress_label)
         worker.signals.result.connect(self.blocklist_clean_blocklist_button_usernames_grabbed)
         self.threadpool.start(worker)
-        # names_by_id = self.api.ids_to_names(blocklist)
 
     def blocklist_clean_blocklist_button_usernames_grabbed(self, names_by_id):
         blocklist = []
@@ -430,6 +438,7 @@ class TwitchToolUi(QtWidgets.QWidget):
             self.blocklist_info_Table.setItem(row, 1, QTableWidgetItem(item[0]))
         users_to_unblock = [_id for _id in blocklist if _id not in user_ids]
         worker = Worker(self.api.unblock_users, users_to_unblock)
+        worker.signals.progress.connect(self.set_progress_label)
         worker.signals.result.connect(self.blocklist_clean_blocklist_button_done)
         self.threadpool.start(worker)
 

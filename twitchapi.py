@@ -80,12 +80,14 @@ class Twitch_api:
         else:
             return ""
 
-    def ids_to_names(self, user_ids: List, *args, **kwargs):
+    def ids_to_names(self, user_ids: List, progress_callback):
+        total_num_of_ids = len(user_ids)
         namelist = {}
         if len(user_ids) < 100:
             with self.api_lock:
                 response = self.twitch_helix.get_users(user_ids=user_ids)
                 namelist.update({user["id"]: user["login"] for user in response["data"]})
+                progress_callback.emit(f"Converting ID's to names {len(namelist)} out of (potentially) {total_num_of_ids}")
         else:
             _user_ids = user_ids
             while len(_user_ids) >= 100:
@@ -94,12 +96,17 @@ class Twitch_api:
                     response = self.twitch_helix.get_users(user_ids=_user_ids_part)
                 namelist.update({user["id"]: user["login"] for user in response["data"]})
                 _user_ids = _user_ids[100:]
+                progress_callback.emit(f"Converting ID's to names {len(namelist)} out of (potentially) {total_num_of_ids}")
+        progress_callback.emit(f"Done")
         return namelist
 
-    def unblock_users(self, user_ids: List, *args, **kwargs):
-        for user in user_ids:
+    def unblock_users(self, user_ids: List, progress_callback):
+        user_list_length = len(user_ids)
+        for num, user in enumerate(user_ids):
+            progress_callback.emit(f"Unbanned {num} out of {user_list_length}")
             with self.api_lock:
                 self.twitch_helix.unblock_user(target_user_id=user)
+        progress_callback.emit(f"Done")
 
     def get_all_followed_channel_names(self, user_id, progress_callback):
         with self.api_lock:
