@@ -83,20 +83,23 @@ class Twitch_api:
     def ids_to_names(self, user_ids: List, progress_callback):
         total_num_of_ids = len(user_ids)
         namelist = {}
+        num_of_potential_names_done = 0
         if len(user_ids) < 100:
             with self.api_lock:
+                num_of_potential_names_done += len(user_ids)
                 response = self.twitch_helix.get_users(user_ids=user_ids)
                 namelist.update({user["id"]: user["login"] for user in response["data"]})
-                progress_callback.emit(f"Converting ID's to names {len(namelist)} out of (potentially) {total_num_of_ids}")
+                progress_callback.emit(f"Converting ID's to names {num_of_potential_names_done} out of (potentially) {total_num_of_ids}. {len(namelist)} Valid users")
         else:
             _user_ids = user_ids
             while len(_user_ids) >= 100:
                 _user_ids_part = _user_ids[:100]
                 with self.api_lock:
+                    num_of_potential_names_done += len(_user_ids_part)
                     response = self.twitch_helix.get_users(user_ids=_user_ids_part)
                 namelist.update({user["id"]: user["login"] for user in response["data"]})
                 _user_ids = _user_ids[100:]
-                progress_callback.emit(f"Converting ID's to names {len(namelist)} out of (potentially) {total_num_of_ids}")
+                progress_callback.emit(f"Converting ID's to names {num_of_potential_names_done} out of (potentially) {total_num_of_ids}. {len(namelist)} Valid users")
         progress_callback.emit(f"Done")
         return namelist
 
