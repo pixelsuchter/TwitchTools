@@ -15,11 +15,11 @@ class Bot(commands.Bot):
         self.progress_callback.emit("hello")
 
     async def event_message(self, message):
-        self.progress_callback.emit((message.timestamp, message.author, message.content))
+        # self.progress_callback.emit((message.timestamp, message.author, message.content))
         await self.handle_commands(message)
 
     # Commands use a decorator...
-    @commands.command(name='test')
-    async def my_command(self, ctx):
-        await ctx.send(f'Hello {ctx.author.name}!')
+    # @commands.command(name='test')
+    # async def my_command(self, ctx):
+    #     await ctx.send(f'Hello {ctx.author.name}!')
 

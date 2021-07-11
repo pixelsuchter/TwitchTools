@@ -19,13 +19,20 @@ class Twitch_api:
 
         self.api_lock = Lock()
         scopes = [twitchAPI.AuthScope.USER_EDIT, twitchAPI.AuthScope.MODERATION_READ, twitchAPI.AuthScope.CHANNEL_MODERATE, twitchAPI.AuthScope.CHANNEL_READ_REDEMPTIONS,
-                  twitchAPI.AuthScope.CHAT_READ, twitchAPI.AuthScope.USER_READ_BLOCKED_USERS]
+                  twitchAPI.AuthScope.CHAT_READ, twitchAPI.AuthScope.USER_READ_BLOCKED_USERS, twitchAPI.AuthScope.USER_MANAGE_BLOCKED_USERS]
 
         self.twitch_helix = twitchAPI.Twitch(app_id=self.credentials["client id"], app_secret=self.credentials["app secret"], target_app_auth_scope=scopes)
         self.twitch_helix.authenticate_app(scopes)
 
         token_status = twitchAPI.oauth.validate_token(self.credentials["oauth token"])
-        if "login" not in token_status.keys():
+        try:
+            _scopes = token_status["scopes"]
+            login = token_status["login"]
+
+            for scope in scopes:
+                if scope not in _scopes:
+                    raise KeyError
+        except KeyError:
             auth = UserAuthenticator(self.twitch_helix, scopes, force_verify=False)
             self.credentials["oauth token"], self.credentials["refresh token"] = auth.authenticate()
             with open("credentials.json", "w") as credentials_file:
@@ -73,7 +80,7 @@ class Twitch_api:
         else:
             return ""
 
-    def ids_to_names(self, user_ids: List):
+    def ids_to_names(self, user_ids: List, *args, **kwargs):
         namelist = {}
         if len(user_ids) < 100:
             with self.api_lock:
@@ -89,6 +96,10 @@ class Twitch_api:
                 _user_ids = _user_ids[100:]
         return namelist
 
+    def unblock_users(self, user_ids: List, *args, **kwargs):
+        for user in user_ids:
+            with self.api_lock:
+                self.twitch_helix.unblock_user(target_user_id=user)
 
     def get_all_followed_channel_names(self, user_id, progress_callback):
         with self.api_lock:
