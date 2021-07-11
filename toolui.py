@@ -375,7 +375,6 @@ class TwitchToolUi(QtWidgets.QWidget):
                         _table.setItem(0, 0, QTableWidgetItem(str(data[0])))
                         _table.setItem(0, 1, QTableWidgetItem(str(data[1])))
 
-
     def blocklist_get_blocklist_Button_action(self):
         self.blocklist_get_blocklist_Button.setEnabled(False)
         self.blocklist_clean_blocklist_Button.setEnabled(False)
@@ -530,8 +529,8 @@ class TwitchToolUi(QtWidgets.QWidget):
     def modactions_import_callback(self):
         files_to_read = QFileDialog.getOpenFileNames(caption="Select files to import", dir="", filter="Text files (*.txt)")
         for file_path in files_to_read[0]:
-            with open(file_path, "rb") as file:
-                file_string = file.read().decode("utf-8").replace("\r\n", "\n")
+            with open(file_path, "r", encoding="utf-8") as file:
+                file_string = file.read()
             action_list = modactions_seperate_file_to_individual_actions_regex.findall(file_string)
             for action in action_list:
                 action_parts = [action_part.strip() for action_part in action.split("\n") if action_part]
