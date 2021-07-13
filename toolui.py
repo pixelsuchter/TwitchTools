@@ -452,22 +452,58 @@ class TwitchToolUi(QtWidgets.QWidget):
     def init_banlist_info(self, parent):
         # Create Widgets
         self.banlist_get_banlist_Button = QPushButton("Get Banlist")
+        self.banlist_export_namelist_Button = QPushButton("Export Bans as Namelist")
+        self.banlist_import_namelist_Button = QPushButton("Import Names from Namelist")
+        self.banlist_ban_imported_names_Button = QPushButton("Ban imported Names")
         self.banlist_info_Table = QTableWidget()
         self.banlist_info_Table.setColumnCount(3)
         self.banlist_info_Table.setHorizontalHeaderItem(0, QTableWidgetItem("User Name"))
         self.banlist_info_Table.setHorizontalHeaderItem(1, QTableWidgetItem("User ID"))
         self.banlist_info_Table.setHorizontalHeaderItem(2, QTableWidgetItem("Expires At"))
+        self.banlist_import_ListWidget = QListWidget()
 
         # Create layout and add widgets
+        button_row = QHBoxLayout()
+        button_row.addWidget(self.banlist_get_banlist_Button)
+        button_row.addWidget(self.banlist_export_namelist_Button)
+        button_row.addWidget(self.banlist_import_namelist_Button)
+        button_row.addWidget(self.banlist_ban_imported_names_Button)
+
+        table_row = QHBoxLayout()
+        table_row.addWidget(self.banlist_info_Table)
+        table_row.addWidget(self.banlist_import_ListWidget)
+
         layout = QVBoxLayout()
-        layout.addWidget(self.banlist_get_banlist_Button)
-        layout.addWidget(self.banlist_info_Table)
+        layout.addLayout(button_row)
+        layout.addLayout(table_row)
 
         # Set dialog layout
         parent.setLayout(layout)
 
         # Add actions
         self.banlist_get_banlist_Button.clicked.connect(self.banlist_get_banlist_Button_action)
+        self.banlist_export_namelist_Button.clicked.connect(self.banlist_export_namelist_callback)
+        self.banlist_import_namelist_Button.clicked.connect(self.banlist_import_namelist_callback)
+
+    def banlist_import_namelist_callback(self):
+        files_to_read = QFileDialog.getOpenFileNames(caption="Select files to import", dir="", filter="Text files (*.txt)")
+        for file_path in files_to_read[0]:
+            with open(file_path, "r", encoding="utf-8") as file:
+                for line in file.readlines():
+                    name = line.strip()
+                    self.banlist_import_ListWidget.addItem(name)
+
+    def banlist_export_namelist_callback(self):
+        file = QFileDialog.getOpenFileName(caption="Select files to export to", dir="", filter="Text files (*.txt)")[0]
+        name_list = []
+        rowcount = self.banlist_info_Table.rowCount()
+        for i in range(rowcount):
+            name = self.banlist_info_Table.item(i, 0)
+            name_list.append(name.text())
+        name_list.sort()
+        with open(file, "a") as name_file:
+            for name in name_list:
+                name_file.write(f"{name}\n")
 
     def banlist_get_banlist_Button_action(self):
         self.banlist_get_banlist_Button.setEnabled(False)
