@@ -256,12 +256,15 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.follow_grabber_follow_Table.setRowCount(0)
         name = self.follow_grabber_username_LineEdit.text()
         if name:
-            user_id = self.api.names_to_id(name)[0]
+            user_id = self.api.names_to_id(name)
             if user_id:
+                user_id = user_id[0]
                 worker = Worker(self.api.get_all_followed_channel_names, user_id)
                 worker.signals.progress.connect(self.follow_grabber_get_follows_button_thread_return)
                 worker.signals.result.connect(self.follow_grabber_get_follows_button_thread_done)
                 self.threadpool.start(worker)
+            else:
+                self.follow_grabber_get_follows_button_thread_done()
         else:
             self.follow_grabber_get_follows_button_thread_done()
 
@@ -484,6 +487,29 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.banlist_get_banlist_Button.clicked.connect(self.banlist_get_banlist_Button_action)
         self.banlist_export_namelist_Button.clicked.connect(self.banlist_export_namelist_callback)
         self.banlist_import_namelist_Button.clicked.connect(self.banlist_import_namelist_callback)
+        self.banlist_ban_imported_names_Button.clicked.connect(self.banlist_ban_imported_names_callback)
+
+    def banlist_ban_imported_names_callback(self):
+        banned_names = []
+        row_count = self.banlist_info_Table.rowCount()
+        for i in range(row_count):
+            _item = self.banlist_info_Table.item(i, 0)
+            _name = _item.text()
+            if _name:
+                banned_names.append(_name)
+        banned_names.sort()
+        namelist = []
+        row_count = self.banlist_import_ListWidget.count()
+        for i in range(row_count):
+            _item = self.banlist_import_ListWidget.item(i)
+            _name = _item.text()
+            if _name and _name not in banned_names:
+                namelist.append(_name)
+        namelist.sort()
+        worker = Worker(self.api.bot.ban_namelist, "pixelsuchter", namelist)
+        worker.signals.progress.connect(self.set_progress_label)
+        self.threadpool.start(worker)
+
 
     def banlist_import_namelist_callback(self):
         files_to_read = QFileDialog.getOpenFileNames(caption="Select files to import", dir="", filter="Text files (*.txt)")
@@ -674,7 +700,6 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.mod_actions_Table.resizeColumnsToContents()
 
 
-
     def modactions_ids_to_names_callback(self):
         rowcount = self.mod_actions_Table.rowCount()
         ids = []
@@ -695,7 +720,6 @@ class TwitchToolUi(QtWidgets.QWidget):
             self.mod_actions_Table.resizeColumnsToContents()
 
     def pubsub_mod_action_handler(self, response):
-        print(response)
         uuid, action = response
         data = action["data"]
         self.mod_actions_Table.insertRow(0)

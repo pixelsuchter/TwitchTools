@@ -1,3 +1,7 @@
+import asyncio
+import time
+from typing import List
+
 from twitchio.ext import commands
 
 
@@ -18,8 +22,16 @@ class Bot(commands.Bot):
         # self.progress_callback.emit((message.timestamp, message.author, message.content))
         await self.handle_commands(message)
 
-    # Commands use a decorator...
-    # @commands.command(name='test')
-    # async def my_command(self, ctx):
-    #     await ctx.send(f'Hello {ctx.author.name}!')
+    async def _ban_namelist(self, channel: str, namelist: List[str], progress_callback=None):
+        chnl = self.get_channel(channel)
+        num_of_names_to_ban = len(namelist)
+        for num, name in enumerate(namelist):
+            await chnl.ban(name)
+            if progress_callback:
+                progress_callback.emit(f"Banned {num} out of {num_of_names_to_ban} Users")
+            await asyncio.sleep(0.3)
 
+    def ban_namelist(self, channel: str, namelist: List[str], progress_callback=None):
+        task = self.loop.create_task(self._ban_namelist(channel, namelist, progress_callback))
+        while not task.done():
+            time.sleep(2)
