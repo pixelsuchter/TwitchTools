@@ -4,6 +4,8 @@ from typing import List
 
 from twitchio.ext import commands
 
+chat_timeout = 0.4
+
 
 class Bot(commands.Bot):
     def __init__(self, token, client_id, nickname, command_prefix, channels_to_join):
@@ -34,7 +36,7 @@ class Bot(commands.Bot):
             await chnl.ban(name)
             if progress_callback:
                 progress_callback.emit(f"Banned {num} out of {num_of_names_to_ban} Users")
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(chat_timeout)
 
     def ban_namelist(self, channel: str, namelist: List[str], progress_callback=None):
         task = self.loop.create_task(self._ban_namelist(channel, namelist, progress_callback))
