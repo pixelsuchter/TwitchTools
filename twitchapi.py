@@ -109,7 +109,7 @@ class Twitch_api:
     def unblock_users(self, user_ids: List, progress_callback):
         user_list_length = len(user_ids)
         for num, user in enumerate(user_ids):
-            progress_callback.emit(f"Unbanned {num} out of {user_list_length}")
+            progress_callback.emit(f"Unblocked {num} out of {user_list_length}")
             with self.api_lock:
                 self.twitch_helix.unblock_user(target_user_id=user)
         progress_callback.emit(f"Done")

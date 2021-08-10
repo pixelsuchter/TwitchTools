@@ -1,15 +1,11 @@
+import asyncio
 import csv
 import datetime
 import json
 import os.path
-import random
 import sys
-import threading
-import time
 import traceback
 import re
-from importlib.metadata import files
-from threading import Thread
 
 from PySide6 import QtWidgets, QtGui, QtCore
 from PySide6.QtCore import Slot, QRunnable, Signal, QObject, QThreadPool
@@ -86,6 +82,8 @@ class Worker(QRunnable):
         # Retrieve args/kwargs here; and fire processing using them
         try:
             result = self.fn(*self.args, **self.kwargs)
+        except asyncio.CancelledError:  # gets thrown on exit
+            pass
         except:
             traceback.print_exc()
             exctype, value = sys.exc_info()[:2]
@@ -179,8 +177,10 @@ class TwitchToolUi(QtWidgets.QWidget):
             with open("settings.json", "w") as settings_file:
                 json.dump(self.settings, settings_file, indent="  ")
                 print("Settings saved")
+        # self.api.bot.stop_loop()
         self.run_bot.remove(True)
         self.api.pubsub.stop()
+        # self.api.bot.eventloop.stop()
 
     # <editor-fold desc="Status bar">
     def add_status(self, status: str):

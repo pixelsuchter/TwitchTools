@@ -7,8 +7,13 @@ from twitchio.ext import commands
 
 class Bot(commands.Bot):
     def __init__(self, token, client_id, nickname, command_prefix, channels_to_join):
+        self.eventloop = asyncio.get_event_loop()
         super().__init__(irc_token=token, client_id=client_id, nick=nickname, prefix=command_prefix,
-                         initial_channels=channels_to_join)
+                         initial_channels=channels_to_join, loop=self.eventloop)
+
+    def stop_loop(self):
+        for task in asyncio.Task.all_tasks():
+            task.cancel()
 
     async def event_pubsub(self, data):
         pass

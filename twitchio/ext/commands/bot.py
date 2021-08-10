@@ -307,7 +307,7 @@ class Bot(Client):
 
         try:
             loop.run_until_complete(self._ws._listen(run_flag))
-        except KeyboardInterrupt:
+        except KeyboardInterrupt or asyncio.CancelledError:
             pass
         finally:
             self._ws.teardown()
