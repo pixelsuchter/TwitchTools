@@ -42,3 +42,22 @@ class Bot(commands.Bot):
         task = self.loop.create_task(self._ban_namelist(channel, namelist, progress_callback))
         while not task.done():
             time.sleep(2)
+
+
+    async def _unban_namelist(self, channel: str, namelist: List[str], progress_callback=None):
+        chnl = self.get_channel(channel)
+        num_of_names_to_unban = len(namelist)
+        for num, name in enumerate(namelist):
+            await chnl.unban(name)
+            print(f"unbanned {name} in channel {channel}")
+            if progress_callback:
+                progress_callback.emit(f"Unbanned {num} out of {num_of_names_to_unban} Users")
+            await asyncio.sleep(chat_timeout)
+        if progress_callback:
+            progress_callback.emit(f"Done")
+
+
+    def unban_namelist(self, channel: str, namelist: List[str], progress_callback=None):
+        task = self.loop.create_task(self._unban_namelist(channel, namelist, progress_callback))
+        while not task.done():
+            time.sleep(2)
