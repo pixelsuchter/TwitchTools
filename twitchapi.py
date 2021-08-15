@@ -106,6 +106,35 @@ class Twitch_api:
             progress_callback.emit(f"Done")
         return namelist
 
+    def get_valid_users(self, user_names: List, progress_callback=None):
+        total_num_of_ids = len(user_names)
+        namelist = []
+        num_of_potential_names_done = 0
+        if len(user_names) < 100:
+            with self.api_lock:
+                num_of_potential_names_done += len(user_names)
+                response = self.twitch_helix.get_users(logins=user_names)
+                namelist.extend([user["login"] for user in response["data"]])
+                if progress_callback:
+                    progress_callback.emit(f"Checking for valid users {num_of_potential_names_done} out of (potentially) {total_num_of_ids}. {len(namelist)} Valid users")
+        else:
+            _user_names = user_names
+            while len(_user_names) >= 100:
+                _user_names_part = _user_names[:100]
+                with self.api_lock:
+                    try:
+                        num_of_potential_names_done += len(_user_names_part)
+                        response = self.twitch_helix.get_users(logins=_user_names_part)
+                        namelist.extend([user["login"] for user in response["data"]])
+                    except twitchAPI.TwitchAPIException:
+                        print(_user_names_part)
+                _user_names = _user_names[100:]
+                if progress_callback:
+                    progress_callback.emit(f"Checking for valid users {num_of_potential_names_done} out of (potentially) {total_num_of_ids}. {len(namelist)} Valid users")
+        if progress_callback:
+            progress_callback.emit(f"Done")
+        return namelist
+
     def unblock_users(self, user_ids: List, progress_callback):
         user_list_length = len(user_ids)
         for num, user in enumerate(user_ids):
@@ -160,7 +189,6 @@ class Twitch_api:
                 time.sleep(1)
         except Exception as e:
             print(e)
-
     # </editor-fold>
 
     # <editor-fold desc="Pubsub Section">
@@ -171,7 +199,6 @@ class Twitch_api:
             self.pubsub.listen_chat_moderator_actions(self.own_id, channel, mod_actions_callback)
 
         self.pubsub.start()
-
 
     def pubsub_mod_actions_callback(self, mod_action_signal, *args):
         mod_action_signal.emit(args)
