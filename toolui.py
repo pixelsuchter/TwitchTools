@@ -464,13 +464,19 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.banlist_info_Table.setHorizontalHeaderItem(1, QTableWidgetItem("User ID"))
         self.banlist_info_Table.setHorizontalHeaderItem(2, QTableWidgetItem("Expires At"))
         self.banlist_import_ListWidget = QListWidget()
+        self.banlist_clean_banlist_Button = QPushButton("Clean Banlist")
+        self.banlist_clean_importedlist_Button = QPushButton("Clean Imported Banlist")
+        self.banlist_export_imported_banlist_Button = QPushButton("Export Imported Banlist")
 
         # Create layout and add widgets
         button_row = QHBoxLayout()
         button_row.addWidget(self.banlist_get_banlist_Button)
         button_row.addWidget(self.banlist_export_namelist_Button)
+        button_row.addWidget(self.banlist_clean_banlist_Button)
         button_row.addWidget(self.banlist_import_namelist_Button)
         button_row.addWidget(self.banlist_ban_imported_names_Button)
+        button_row.addWidget(self.banlist_clean_importedlist_Button)
+        button_row.addWidget(self.banlist_export_imported_banlist_Button)
 
         table_row = QHBoxLayout()
         table_row.addWidget(self.banlist_info_Table)
@@ -488,6 +494,79 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.banlist_export_namelist_Button.clicked.connect(self.banlist_export_namelist_callback)
         self.banlist_import_namelist_Button.clicked.connect(self.banlist_import_namelist_callback)
         self.banlist_ban_imported_names_Button.clicked.connect(self.banlist_ban_imported_names_callback)
+        self.banlist_clean_banlist_Button.clicked.connect(self.banlist_clean_banlist_Button_callback)
+        self.banlist_clean_importedlist_Button.clicked.connect(self.banlist_clean_imported_banlist_callback)
+        self.banlist_export_imported_banlist_Button.clicked.connect(self.banlist_export_imported_banlist_callback)
+
+    def banlist_export_imported_banlist_callback(self):
+        file_to_write = QFileDialog.getSaveFileName(caption="Select file to export to", dir="")
+        if file_to_write[0]:
+            with open(file_to_write[0], "w") as f:
+                for i in range(self.banlist_import_ListWidget.count()):
+                    f.write(f"{self.banlist_import_ListWidget.item(i).text()}\n")
+
+
+    def banlist_clean_imported_banlist_callback(self):
+        self.add_status("Cleaning imported Banlist")
+        self.banlist_clean_importedlist_Button.setEnabled(False)
+        banlist = []
+        for i in range(self.banlist_import_ListWidget.count()):
+            item = self.banlist_import_ListWidget.item(i)
+            if item:
+                user_name = item.text()
+                if user_name:
+                    banlist.append(user_name)
+        worker = Worker(self.api.get_valid_users, banlist)
+        worker.signals.progress.connect(self.set_progress_label)
+        worker.signals.result.connect(self.banlist_clean_imported_banlist_names_validated)
+        self.threadpool.start(worker)
+
+    def banlist_clean_imported_banlist_names_validated(self, namelist):
+        self.banlist_import_ListWidget.clear()
+        for name in namelist:
+            self.banlist_import_ListWidget.addItem(name)
+        self.banlist_clean_importedlist_Button.setEnabled(True)
+        self.banlist_import_ListWidget.sortItems(Qt.AscendingOrder)
+        self.remove_status("Cleaning imported Banlist")
+
+    def banlist_clean_banlist_Button_callback(self):
+        self.add_status("Cleaning Banlist")
+        self.banlist_clean_banlist_Button.setEnabled(False)
+        banlist = []
+        for i in range(self.banlist_info_Table.rowCount()):
+            item = self.banlist_info_Table.item(i, 1)
+            if item:
+                user_id = item.text()
+                if user_id:
+                    banlist.append(user_id)
+        worker = Worker(self.api.ids_to_names, banlist)
+        worker.signals.progress.connect(self.set_progress_label)
+        worker.signals.result.connect(self.banlist_clean_banlist_Button_usernames_grabbed)
+        self.threadpool.start(worker)
+
+    def banlist_clean_banlist_Button_usernames_grabbed(self, names_by_id):
+        banlist = []
+        for i in range(self.banlist_info_Table.rowCount()):
+            item = self.banlist_info_Table.item(i, 0)
+            if item:
+                user_name = item.text()
+                if user_name:
+                    banlist.append(user_name)
+        user_names = names_by_id.values()
+        self.banlist_info_Table.clearContents()
+        self.banlist_info_Table.setRowCount(len(names_by_id))
+        for row, item in enumerate(names_by_id.items()):
+            self.banlist_info_Table.setItem(row, 0, QTableWidgetItem(item[1]))
+            self.banlist_info_Table.setItem(row, 1, QTableWidgetItem(item[0]))
+        users_to_unban = [name for name in banlist if name not in user_names]
+        worker = Worker(self.api.bot.unban_namelist, "pixelsuchter", users_to_unban)
+        worker.signals.progress.connect(self.set_progress_label)
+        worker.signals.result.connect(self.banlist_clean_blocklist_button_done)
+        self.threadpool.start(worker)
+
+    def banlist_clean_blocklist_button_done(self):
+        self.remove_status("Cleaning Banlist")
+        self.banlist_clean_banlist_Button.setEnabled(True)
 
     def banlist_ban_imported_names_callback(self):
         banned_names = []
@@ -510,26 +589,27 @@ class TwitchToolUi(QtWidgets.QWidget):
         worker.signals.progress.connect(self.set_progress_label)
         self.threadpool.start(worker)
 
-
     def banlist_import_namelist_callback(self):
         files_to_read = QFileDialog.getOpenFileNames(caption="Select files to import", dir="", filter="Text files (*.txt)")
         for file_path in files_to_read[0]:
             with open(file_path, "r", encoding="utf-8") as file:
                 for line in file.readlines():
                     name = line.strip()
-                    self.banlist_import_ListWidget.addItem(name)
+                    if name:
+                        self.banlist_import_ListWidget.addItem(name)
 
     def banlist_export_namelist_callback(self):
         file = QFileDialog.getOpenFileName(caption="Select files to export to", dir="", filter="Text files (*.txt)")[0]
-        name_list = []
-        rowcount = self.banlist_info_Table.rowCount()
-        for i in range(rowcount):
-            name = self.banlist_info_Table.item(i, 0)
-            name_list.append(name.text())
-        name_list.sort()
-        with open(file, "a") as name_file:
-            for name in name_list:
-                name_file.write(f"{name}\n")
+        if file:
+            name_list = []
+            rowcount = self.banlist_info_Table.rowCount()
+            for i in range(rowcount):
+                name = self.banlist_info_Table.item(i, 0)
+                name_list.append(name.text())
+            name_list.sort()
+            with open(file, "a") as name_file:
+                for name in name_list:
+                    name_file.write(f"{name}\n")
 
     def banlist_get_banlist_Button_action(self):
         self.banlist_get_banlist_Button.setEnabled(False)
