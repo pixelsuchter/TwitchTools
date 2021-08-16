@@ -37,6 +37,8 @@ class Bot(commands.Bot):
             if progress_callback:
                 progress_callback.emit(f"Banned {num} out of {num_of_names_to_ban} Users")
             await asyncio.sleep(chat_timeout)
+        if progress_callback:
+            progress_callback.emit(f"Done")
 
     def ban_namelist(self, channel: str, namelist: List[str], progress_callback=None):
         task = self.loop.create_task(self._ban_namelist(channel, namelist, progress_callback))
