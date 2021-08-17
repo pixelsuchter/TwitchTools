@@ -67,10 +67,14 @@ def main():
             _settings = json.load(settings_file)
             assert _settings.keys() == settings.keys()
             settings = _settings
-    except (OSError, AssertionError, json.JSONDecodeError):
+    except (OSError, AssertionError):
         with open("settings.json", "w") as settings_file:
             print("Settings file corrupt, generated new")
             settings.update(_settings)
+            json.dump(settings, settings_file, indent="  ")
+    except json.JSONDecodeError:
+        with open("settings.json", "w") as settings_file:
+            print("Settings file corrupt, generated new")
             json.dump(settings, settings_file, indent="  ")
 
     credentials = {"client id": "", "app secret": "", "oauth token": "", "refresh token": "", "bot nickname": "", "bot command prefix": "!", "bot channels": [""],
@@ -85,6 +89,10 @@ def main():
         with open("credentials.json", "w") as credentials_file:
             print("Credentials file corrupt, generated new")
             credentials.update(_credentials)
+            json.dump(credentials, credentials_file, indent="  ")
+    except json.JSONDecodeError:
+        with open("credentials.json", "w") as credentials_file:
+            print("Credentials file corrupt, generated new")
             json.dump(credentials, credentials_file, indent="  ")
 
     app = QtWidgets.QApplication([])
