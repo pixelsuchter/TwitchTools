@@ -633,7 +633,7 @@ class TwitchToolUi(QtWidgets.QWidget):
             self.banlist_info_Table.setItem(row, 0, QTableWidgetItem(item[1]))
             self.banlist_info_Table.setItem(row, 1, QTableWidgetItem(item[0]))
         users_to_unban = [name for name in banlist if name not in user_names]
-        worker = Worker(self.api.bot.unban_namelist, "pixelsuchter", users_to_unban)
+        worker = Worker(self.api.bot.unban_namelist, self.api.login, users_to_unban)
         worker.signals.progress.connect(self.set_progress_label)
         worker.signals.result.connect(self.banlist_clean_blocklist_button_done)
         self.threadpool.start(worker)
@@ -659,7 +659,7 @@ class TwitchToolUi(QtWidgets.QWidget):
             if _name and _name not in banned_names:
                 namelist.append(_name)
         namelist.sort()
-        worker = Worker(self.api.bot.ban_namelist, "pixelsuchter", namelist)
+        worker = Worker(self.api.bot.ban_namelist, self.api.login, namelist)
         worker.signals.progress.connect(self.set_progress_label)
         self.threadpool.start(worker)
 

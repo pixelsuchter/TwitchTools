@@ -32,7 +32,6 @@ class Twitch_api:
         token_status = twitchAPI.oauth.validate_token(self.credentials["oauth token"])
         try:
             _scopes = token_status["scopes"]
-            login = token_status["login"]
 
             for scope in scopes:
                 if scope not in _scopes:
@@ -43,7 +42,10 @@ class Twitch_api:
             with open("credentials.json", "w") as credentials_file:
                 json.dump(self.credentials, credentials_file, indent="  ")
             token_status = twitchAPI.oauth.validate_token(self.credentials["oauth token"])
+
         self.own_id = token_status["user_id"]
+        self.login = token_status["login"]
+        print(self.login)
 
         self.twitch_helix.set_user_authentication(self.credentials["oauth token"], scopes, self.credentials["refresh token"])
 
