@@ -4,6 +4,7 @@ import datetime
 import json
 import os.path
 import sys
+import time
 import traceback
 import re
 
@@ -100,6 +101,7 @@ class Worker(QRunnable):
 class TwitchToolUi(QtWidgets.QWidget):
     def __init__(self, settings):
         super(TwitchToolUi, self).__init__()
+        self.run_api = [True]
         self.run_bot = [True]
         self.old_settings = settings.copy()
         self.settings = settings
@@ -139,7 +141,7 @@ class TwitchToolUi(QtWidgets.QWidget):
         layout.addLayout(status_row)
         self.setLayout(layout)
 
-        self.api = twitchapi.Twitch_api()
+        self.api = twitchapi.Twitch_api(self.run_api)
         self.bot_worker = Worker(self.api.bot.run, run_flag=self.run_bot)
         self.bot_worker.signals.progress.connect(self.print_output)
         self.threadpool.start(self.bot_worker)
@@ -177,10 +179,9 @@ class TwitchToolUi(QtWidgets.QWidget):
             with open("settings.json", "w") as settings_file:
                 json.dump(self.settings, settings_file, indent="  ")
                 print("Settings saved")
-        # self.api.bot.stop_loop()
-        self.run_bot.remove(True)
+        self.run_api[0] = False
+        self.run_bot[0] = False
         self.api.pubsub.stop()
-        # self.api.bot.eventloop.stop()
 
     # <editor-fold desc="Status bar">
     def add_status(self, status: str):
@@ -351,20 +352,31 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.blocklist_get_blocklist_Button = QPushButton("Get Blocklist")
         self.blocklist_clean_blocklist_Button = QPushButton("Clean Blocklist")
         self.blocklist_import_blocklist_Button = QPushButton("Import Blocklist")
-        self.blocklist_info_Table = QTableWidget()
-        self.blocklist_info_Table.setColumnCount(2)
-        self.blocklist_info_Table.setHorizontalHeaderItem(0, QTableWidgetItem("User Name"))
-        self.blocklist_info_Table.setHorizontalHeaderItem(1, QTableWidgetItem("User ID"))
+        self.blocklist_api_Table = QTableWidget()
+        self.blocklist_api_Table.setColumnCount(2)
+        self.blocklist_api_Table.setHorizontalHeaderItem(0, QTableWidgetItem("User Name"))
+        self.blocklist_api_Table.setHorizontalHeaderItem(1, QTableWidgetItem("User ID"))
+        self.blocklist_import_Table = QTableWidget()
+        self.blocklist_import_Table.setColumnCount(2)
+        self.blocklist_import_Table.setHorizontalHeaderItem(0, QTableWidgetItem("User Name"))
+        self.blocklist_import_Table.setHorizontalHeaderItem(1, QTableWidgetItem("User ID"))
+        self.blocklist_block_imported_list_Button = QPushButton("Block imported List")
+
 
         # Create layout and add widgets
         button_row_layout = QHBoxLayout()
         button_row_layout.addWidget(self.blocklist_get_blocklist_Button)
         button_row_layout.addWidget(self.blocklist_clean_blocklist_Button)
         button_row_layout.addWidget(self.blocklist_import_blocklist_Button)
+        button_row_layout.addWidget(self.blocklist_block_imported_list_Button)
+
+        table_layout = QHBoxLayout()
+        table_layout.addWidget(self.blocklist_api_Table)
+        table_layout.addWidget(self.blocklist_import_Table)
 
         layout = QVBoxLayout()
         layout.addLayout(button_row_layout)
-        layout.addWidget(self.blocklist_info_Table)
+        layout.addLayout(table_layout)
 
         # Set dialog layout
         parent.setLayout(layout)
@@ -373,36 +385,99 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.blocklist_get_blocklist_Button.clicked.connect(self.blocklist_get_blocklist_Button_action)
         self.blocklist_clean_blocklist_Button.clicked.connect(self.blocklist_clean_blocklist_button_callback)
         self.blocklist_import_blocklist_Button.clicked.connect(self.blocklist_import_blocklist_Button_callback)
+        self.blocklist_block_imported_list_Button.clicked.connect(self.blocklist_block_imported_list_Button_callback)
+
+    def blocklist_block_imported_list_Button_callback(self):
+        self.blocklist_block_imported_list_Button.setEnabled(False)
+        result = QMessageBox.question(self, "Blocklist", "Update Blocklist?", QMessageBox.Yes, QMessageBox.No)
+        if result == QMessageBox.Yes:
+            self.blocklist_get_blocklist_Button_action()
+        worker = Worker(self.blocklist_block_imported_list_Button_synced)
+        self.threadpool.start(worker)
+
+    def blocklist_block_imported_list_Button_synced(self, progress_callback):
+        while "Grabbing blocklist, please wait" in self.status_list:
+            time.sleep(0.1)
+        already_blocked_ids = set()  # set used for performance reasons
+        for i in range(self.blocklist_api_Table.rowCount()):
+            item = self.blocklist_api_Table.item(i, 1)
+            if item:
+                user_id = item.text()
+                if user_id:
+                    already_blocked_ids.add(user_id)
+        ids_to_block = []
+        for i in range(self.blocklist_import_Table.rowCount()):
+            item = self.blocklist_import_Table.item(i, 1)
+            if item:
+                user_id = item.text()
+                if user_id and user_id not in already_blocked_ids:  # filter out duplicate blocks
+                    ids_to_block.append(user_id)
+        worker = Worker(self.api.block_users, ids_to_block)
+        worker.signals.progress.connect(self.set_progress_label)
+        self.threadpool.start(worker)
+        self.blocklist_block_imported_list_Button.setEnabled(True)
 
     def blocklist_import_blocklist_Button_callback(self):
-        _table = self.blocklist_info_Table
-        files_to_read = QFileDialog.getOpenFileNames(caption="Select files to import", dir="", filter="CSV Files (*.csv)")
+        _table = self.blocklist_import_Table
+        files_to_read = QFileDialog.getOpenFileNames(caption="Select files to import", dir="", filter="Commanderroot CSV Files (*.csv);;Text files (*.txt)")
         for file_path in files_to_read[0]:
-            with open(file_path, "r", encoding="utf-8") as file:
-                csv_data = csv.reader(file.readlines())
-                for data in csv_data:
-                    if data[0] != "userName":
-                        _table.insertRow(0)
-                        _table.setItem(0, 0, QTableWidgetItem(str(data[0])))
-                        _table.setItem(0, 1, QTableWidgetItem(str(data[1])))
+            if files_to_read[1] == "Commanderroot CSV Files (*.csv)":
+                with open(file_path, "r", encoding="utf-8") as file:
+                    csv_data = csv.reader(file.readlines())
+                    for data in csv_data:
+                        if data[0] != "userName":
+                            _table.insertRow(0)
+                            _table.setItem(0, 0, QTableWidgetItem(str(data[0])))
+                            _table.setItem(0, 1, QTableWidgetItem(str(data[1])))
+            elif files_to_read[1] == "Text files (*.txt)":
+                with open(file_path, "r") as file:
+                    lines = file.readlines()
+                    old_rowcount = _table.rowCount()
+                    _table.setRowCount(old_rowcount + len(lines))
+                    idx = 0
+                    for name in lines:
+                        if name.strip().lower():
+                            _table.setItem(old_rowcount+idx, 0, QTableWidgetItem(name.strip().lower()))
+                            idx += 1
+                names_no_id = []
+                for idx in range(_table.rowCount()):
+                    name_item, id_item = _table.item(idx, 0), _table.item(idx, 1)
+                    if name_item:
+                        if id_item:
+                            print(name_item.text(), id_item.text())
+                        else:
+                            names_no_id.append(name_item.text())
+                worker = Worker(self.api.names_to_ids, names_no_id)
+                worker.signals.progress.connect(self.set_progress_label)
+                worker.signals.result.connect(self.blocklist_import_blocklist_covert_to_ids_callback)
+                self.threadpool.start(worker)
+
+    def blocklist_import_blocklist_covert_to_ids_callback(self, names_by_id):
+        self.blocklist_import_Table.clear()
+        self.blocklist_import_Table.setRowCount(len(names_by_id))
+        for idx, (_name, _id) in enumerate(names_by_id.items()):
+            self.blocklist_import_Table.setItem(idx, 0, QTableWidgetItem(_name))
+            self.blocklist_import_Table.setItem(idx, 1, QTableWidgetItem(_id))
+        self.blocklist_import_Table.setHorizontalHeaderItem(0, QTableWidgetItem("User Name"))
+        self.blocklist_import_Table.setHorizontalHeaderItem(1, QTableWidgetItem("User ID"))
 
     def blocklist_get_blocklist_Button_action(self):
         self.blocklist_get_blocklist_Button.setEnabled(False)
         self.blocklist_clean_blocklist_Button.setEnabled(False)
         self.add_status("Grabbing blocklist, please wait")
-        self.blocklist_info_Table.clearContents()
-        self.blocklist_info_Table.setRowCount(0)
+        self.blocklist_api_Table.clearContents()
+        self.blocklist_api_Table.setRowCount(0)
         worker = Worker(self.api.get_all_blocked_users)
         worker.signals.progress.connect(self.blocklist_get_blocklist_Button_progress)
         worker.signals.result.connect(self.blocklist_get_blocklist_Button_done)
         self.threadpool.start(worker)
 
     def blocklist_get_blocklist_Button_progress(self, blocklist):
-        row_count = self.blocklist_info_Table.rowCount()
-        self.blocklist_info_Table.setRowCount(row_count + len(blocklist))
+        row_count = self.blocklist_api_Table.rowCount()
+        self.blocklist_api_Table.setRowCount(row_count + len(blocklist))
         for row, line in enumerate(blocklist.items()):
             for col, entry in enumerate(line):
-                self.blocklist_info_Table.setItem(row + row_count, col, QTableWidgetItem(QIcon(), str(entry)))
+                self.blocklist_api_Table.setItem(row + row_count, col, QTableWidgetItem(QIcon(), str(entry)))
 
     def blocklist_get_blocklist_Button_done(self):
         self.remove_status("Grabbing blocklist, please wait")
@@ -414,8 +489,8 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.blocklist_clean_blocklist_Button.setEnabled(False)
         self.blocklist_get_blocklist_Button.setEnabled(False)
         blocklist = []
-        for i in range(self.blocklist_info_Table.rowCount()):
-            item = self.blocklist_info_Table.item(i, 1)
+        for i in range(self.blocklist_api_Table.rowCount()):
+            item = self.blocklist_api_Table.item(i, 1)
             if item:
                 user_id = item.text()
                 if user_id:
@@ -427,18 +502,18 @@ class TwitchToolUi(QtWidgets.QWidget):
 
     def blocklist_clean_blocklist_button_usernames_grabbed(self, names_by_id):
         blocklist = []
-        for i in range(self.blocklist_info_Table.rowCount()):
-            item = self.blocklist_info_Table.item(i, 1)
+        for i in range(self.blocklist_api_Table.rowCount()):
+            item = self.blocklist_api_Table.item(i, 1)
             if item:
                 user_id = item.text()
                 if user_id:
                     blocklist.append(user_id)
         user_ids = names_by_id.keys()
-        self.blocklist_info_Table.clearContents()
-        self.blocklist_info_Table.setRowCount(len(names_by_id))
+        self.blocklist_api_Table.clearContents()
+        self.blocklist_api_Table.setRowCount(len(names_by_id))
         for row, item in enumerate(names_by_id.items()):
-            self.blocklist_info_Table.setItem(row, 0, QTableWidgetItem(item[1]))
-            self.blocklist_info_Table.setItem(row, 1, QTableWidgetItem(item[0]))
+            self.blocklist_api_Table.setItem(row, 0, QTableWidgetItem(item[1]))
+            self.blocklist_api_Table.setItem(row, 1, QTableWidgetItem(item[0]))
         users_to_unblock = [_id for _id in blocklist if _id not in user_ids]
         worker = Worker(self.api.unblock_users, users_to_unblock)
         worker.signals.progress.connect(self.set_progress_label)

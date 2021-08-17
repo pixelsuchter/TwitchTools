@@ -319,7 +319,7 @@ class WebsocketConnection:
         if not self.is_connected and self._last_exec:
             raise WSConnectionFailure(f'Websocket connection failure:\n\n{self._last_exec}')
 
-        while True in run_flag:
+        while run_flag[0]:
             if self._authentication_error:
                 log.error('AUTHENTICATION ERROR:: Incorrect IRC Token passed.')
                 raise AuthenticationError
