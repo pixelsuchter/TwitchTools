@@ -145,7 +145,6 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.bot_worker = Worker(self.api.bot.run, run_flag=self.run_bot)
         self.bot_worker.signals.progress.connect(self.print_output)
         self.threadpool.start(self.bot_worker)
-
         self.pubsub_worker = Worker(self.api.init_pubsub)
         self.pubsub_worker.signals.progress.connect(self.pubsub_mod_action_handler)
         self.threadpool.start(self.pubsub_worker)

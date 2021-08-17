@@ -10,7 +10,7 @@ chat_timeout = 0.4
 class Bot(commands.Bot):
     def __init__(self, token, client_id, nickname, command_prefix, channels_to_join):
         self.eventloop = asyncio.get_event_loop()
-        super().__init__(irc_token=token, client_id=client_id, nick=nickname, prefix=command_prefix,
+        super().__init__(irc_token=f"oauth:{token}", client_id=client_id, nick=nickname, prefix=command_prefix,
                          initial_channels=channels_to_join, loop=self.eventloop)
 
     def stop_loop(self):

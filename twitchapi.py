@@ -12,10 +12,14 @@ import twitchchat
 from functools import partial
 
 
+class NoBotTokenException(Exception):
+    pass
+
+
 class Twitch_api:
     def __init__(self, run_flag):
         self.run_flag = run_flag
-        self.credentials = {"client id": "", "app secret": "", "oauth token": "", "refresh token": "", "bot nickname": "", "bot command prefix": "!", "bot channels": [""]}
+        self.credentials = {}
         self.load_credentials()
 
         self.api_lock = Lock()
@@ -45,26 +49,23 @@ class Twitch_api:
 
         self.twitch_legacy = twitch.TwitchClient(client_id=self.credentials["client id"], oauth_token=self.credentials["oauth token"])
 
-        self.bot = twitchchat.Bot(token=f"oauth:{self.credentials['oauth token']}", client_id=self.own_id, nickname=self.credentials["bot nickname"],
-                                  command_prefix=self.credentials["bot command prefix"], channels_to_join=self.credentials["bot channels"])
+        bot_token = self.credentials['bot token'] if self.credentials['use seperate token for bot'] else self.credentials['oauth token']
+        if not bot_token:
+            raise NoBotTokenException
+        else:
+            self.bot = twitchchat.Bot(token=bot_token,
+                                      client_id=self.own_id, nickname=self.credentials["bot nickname"],
+                                      command_prefix=self.credentials["bot command prefix"],
+                                      channels_to_join=self.credentials["bot channels"])
 
         self.pubsub = twitchAPI.pubsub.PubSub(self.twitch_helix)
 
-
     def load_credentials(self):
         # Default credentials
-        self.credentials = {"client id": "", "app secret": "", "oauth token": "", "refresh token": "", "bot nickname": "", "bot command prefix": "!", "bot channels": [""]}
+        with open("credentials.json", "r") as credentials_file:
+            _credentials = json.load(credentials_file)
+            self.credentials = _credentials
 
-        try:
-            with open("credentials.json", "r") as credentials_file:
-                _credentials = json.load(credentials_file)
-                assert _credentials.keys() == self.credentials.keys()
-                self.credentials = _credentials
-        except (OSError, AssertionError):
-            with open("credentials.json", "w") as credentials_file:
-                print("Credentials file corrupt, generated new")
-                self.credentials.update(_credentials)
-                json.dump(self.credentials, credentials_file, indent="  ")
 
     # <editor-fold desc="TwitchAPI Section">
     def names_to_id(self, names: Union[List, str]):
@@ -241,6 +242,7 @@ class Twitch_api:
                 time.sleep(1)
         except Exception as e:
             print(e)
+
     # </editor-fold>
 
     # <editor-fold desc="Pubsub Section">
