@@ -597,7 +597,8 @@ class TwitchToolUi(QtWidgets.QWidget):
 
     def banlist_clean_imported_banlist_names_validated(self, namelist):
         self.banlist_import_ListWidget.clear()
-        for name in namelist:
+        nameset = set(namelist)
+        for name in sorted(nameset):
             self.banlist_import_ListWidget.addItem(name)
         self.banlist_clean_importedlist_Button.setEnabled(True)
         self.banlist_import_ListWidget.sortItems(Qt.AscendingOrder)
@@ -673,7 +674,7 @@ class TwitchToolUi(QtWidgets.QWidget):
                         self.banlist_import_ListWidget.addItem(name)
 
     def banlist_export_namelist_callback(self):
-        file = QFileDialog.getOpenFileName(caption="Select files to export to", dir="", filter="Text files (*.txt)")[0]
+        file = QFileDialog.getSaveFileName(caption="Select file to export to", dir="")[0]
         if file:
             name_list = []
             rowcount = self.banlist_info_Table.rowCount()
@@ -681,7 +682,7 @@ class TwitchToolUi(QtWidgets.QWidget):
                 name = self.banlist_info_Table.item(i, 0)
                 name_list.append(name.text())
             name_list.sort()
-            with open(file, "a") as name_file:
+            with open(file, "w") as name_file:
                 for name in name_list:
                     name_file.write(f"{name}\n")
 
