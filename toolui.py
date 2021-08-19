@@ -7,6 +7,8 @@ import sys
 import time
 import traceback
 import re
+import Levenshtein
+from typing import Dict
 
 from PySide6 import QtWidgets, QtGui, QtCore
 from PySide6.QtCore import Slot, QRunnable, Signal, QObject, QThreadPool
@@ -105,6 +107,9 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.run_bot = [True]
         self.old_settings = settings.copy()
         self.settings = settings
+        self.chat_widgets: Dict[str, QTableWidget] = {}
+        self.chat_users = set()
+        self.max_similarity = 0
 
         self.status_list = ["Idle"]
 
@@ -112,11 +117,12 @@ class TwitchToolUi(QtWidgets.QWidget):
         print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
 
         self.tool_tab_widget = QtWidgets.QTabWidget()
-        self.following_tab = QtWidgets.QWidget()
-        self.user_info_tab = QtWidgets.QWidget()
+        self.following_tab = QtWidgets.QTabWidget()
+        self.user_info_tab = QtWidgets.QTabWidget()
         self.blocklist_info_tab = QtWidgets.QTabWidget()
         self.banlist_info_tab = QtWidgets.QTabWidget()
         self.mod_actions_tab = QtWidgets.QTabWidget()
+        self.chat_tab = QtWidgets.QTabWidget()
         self.settings_tab = QtWidgets.QTabWidget()
 
         self.tool_tab_widget.addTab(self.following_tab, "Following")
@@ -124,6 +130,7 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.tool_tab_widget.addTab(self.blocklist_info_tab, "Blocklist Info")
         self.tool_tab_widget.addTab(self.banlist_info_tab, "Banlist Info")
         self.tool_tab_widget.addTab(self.mod_actions_tab, "Moderator Actions")
+        self.tool_tab_widget.addTab(self.chat_tab, "Chatrooms")
         self.tool_tab_widget.addTab(self.settings_tab, "Settings")
 
         self.tool_tab_widget.currentChanged.connect(self.tab_clicked)
@@ -143,7 +150,7 @@ class TwitchToolUi(QtWidgets.QWidget):
 
         self.api = twitchapi.Twitch_api(self.run_api)
         self.bot_worker = Worker(self.api.bot.run, run_flag=self.run_bot)
-        self.bot_worker.signals.progress.connect(self.print_output)
+        self.bot_worker.signals.progress.connect(self.handle_chat_message)
         self.threadpool.start(self.bot_worker)
         self.pubsub_worker = Worker(self.api.init_pubsub)
         self.pubsub_worker.signals.progress.connect(self.pubsub_mod_action_handler)
@@ -154,6 +161,7 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.init_blocklist_info(self.blocklist_info_tab)
         self.init_banlist_info(self.banlist_info_tab)
         self.init_mod_actions_tab(self.mod_actions_tab)
+        self.init_chat_tab(self.chat_tab)
         self.init_settings_tab(self.settings_tab)
 
     def tab_clicked(self):
@@ -166,9 +174,23 @@ class TwitchToolUi(QtWidgets.QWidget):
             self.settings_window_width_LineEdit.setText(str(self.settings["Window Size"][0]))
             self.settings_window_height_LineEdit.setText(str(self.settings["Window Size"][1]))
 
-    def print_output(self, s):
-        # print(s)
-        pass
+    def handle_chat_message(self, message):
+        chnl = message.channel.name
+        user = message.author.name
+        if chnl in self.chat_widgets.keys():
+            self.chat_widgets[chnl].insertRow(0)
+            self.chat_widgets[chnl].setItem(0, 0, QTableWidgetItem(user))
+            self.chat_widgets[chnl].setItem(0, 1, QTableWidgetItem(message.content))
+            # print((message.timestamp, user, message.author, message.content))
+            self.chat_widgets[chnl].removeRow(500)
+            # naive attempt at bot filtering, did not work
+            # if user not in self.chat_users:  # check if account name is similar to other names in chat
+            #     similarity = 0
+            #     for name in self.chat_users:
+            #         similarity = max(Levenshtein.ratio(name, user), similarity)
+            #     self.max_similarity = max(self.max_similarity, similarity)
+            #     print(similarity, self.max_similarity, user)
+            #     self.chat_users.add(user)
 
     def set_progress_label(self, text):
         self.progess_label.setText(text)
@@ -227,8 +249,6 @@ class TwitchToolUi(QtWidgets.QWidget):
             self.follow_grabber_follow_list_sorting_box_action)
         self.follow_grabber_follow_Table.doubleClicked.connect(self.follow_grabber_follow_table_action)
 
-    def print_output(self, s):
-        print(s)
 
     def follow_grabber_follow_table_action(self, model_index: QtCore.QModelIndex):
         name = self.follow_grabber_follow_Table.item(model_index.row(), 0).text()
@@ -588,7 +608,7 @@ class TwitchToolUi(QtWidgets.QWidget):
             item = self.banlist_import_ListWidget.item(i)
             if item:
                 user_name = item.text()
-                if user_name:
+                if user_name and "+" not in user_name:
                     banlist.append(user_name)
         worker = Worker(self.api.get_valid_users, banlist)
         worker.signals.progress.connect(self.set_progress_label)
@@ -986,6 +1006,31 @@ class TwitchToolUi(QtWidgets.QWidget):
                 if csv_string:
                     output_file.write(csv_string)
                     output_file.write("\n")
+
+    # </editor-fold>
+
+    # <editor-fold desc="Chat tab">
+    def init_chat_tab(self, parent):
+        # Create Widgets
+        for chnl in self.api.credentials["bot channels"]:
+            # print(chnl)
+            table = QTableWidget()
+            table.setRowCount(500)
+            table.setColumnCount(2)
+            table.setHorizontalHeaderItem(0, QTableWidgetItem("Username"))
+            table.setHorizontalHeaderItem(1, QTableWidgetItem("Message"))
+            table.horizontalHeader().setStretchLastSection(True)
+            self.chat_widgets[chnl] = table
+
+        chat_tabs = QTabWidget()
+
+        for chnl in self.chat_widgets:
+            chat_tabs.addTab(self.chat_widgets[chnl], chnl)
+
+        layout = QVBoxLayout()
+        layout.addWidget(chat_tabs)
+        parent.setLayout(layout)
+
 
     # </editor-fold>
 

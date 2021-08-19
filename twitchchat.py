@@ -26,8 +26,8 @@ class Bot(commands.Bot):
         self.progress_callback.emit("hello")
 
     async def event_message(self, message):
-        # self.progress_callback.emit((message.timestamp, message.author, message.content))
-        await self.handle_commands(message)
+        self.progress_callback.emit(message)
+        # await self.handle_commands(message)
 
     async def _ban_namelist(self, channel: str, namelist: List[str], progress_callback=None):
         chnl = self.get_channel(channel)
