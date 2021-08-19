@@ -7,7 +7,7 @@ import sys
 import time
 import traceback
 import re
-import Levenshtein
+from functools import partial
 from typing import Dict
 
 from PySide6 import QtWidgets, QtGui, QtCore
@@ -108,8 +108,8 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.old_settings = settings.copy()
         self.settings = settings
         self.chat_widgets: Dict[str, QTableWidget] = {}
-        self.chat_users = set()
-        self.max_similarity = 0
+        self.chat_message_filters = []
+        self.chat_regex_filters = []
 
         self.status_list = ["Idle"]
 
@@ -183,14 +183,6 @@ class TwitchToolUi(QtWidgets.QWidget):
             self.chat_widgets[chnl].setItem(0, 1, QTableWidgetItem(message.content))
             # print((message.timestamp, user, message.author, message.content))
             self.chat_widgets[chnl].removeRow(500)
-            # naive attempt at bot filtering, did not work
-            # if user not in self.chat_users:  # check if account name is similar to other names in chat
-            #     similarity = 0
-            #     for name in self.chat_users:
-            #         similarity = max(Levenshtein.ratio(name, user), similarity)
-            #     self.max_similarity = max(self.max_similarity, similarity)
-            #     print(similarity, self.max_similarity, user)
-            #     self.chat_users.add(user)
 
     def set_progress_label(self, text):
         self.progess_label.setText(text)
@@ -1027,10 +1019,46 @@ class TwitchToolUi(QtWidgets.QWidget):
         for chnl in self.chat_widgets:
             chat_tabs.addTab(self.chat_widgets[chnl], chnl)
 
+        filter_widget = QWidget()
+        filter_layout = QVBoxLayout()
+        filter_buttonrow_layout = QHBoxLayout()
+
+        self.filter_new_filter_button = QPushButton("Add Filter")
+
+        self.filter_table = QTableWidget()
+        self.filter_table.setColumnCount(4)
+
+        filter_buttonrow_layout.addWidget(self.filter_new_filter_button)
+        filter_layout.addLayout(filter_buttonrow_layout)
+        filter_layout.addWidget(self.filter_table)
+        filter_widget.setLayout(filter_layout)
+        chat_tabs.addTab(filter_widget, "filter")
+
         layout = QVBoxLayout()
         layout.addWidget(chat_tabs)
         parent.setLayout(layout)
 
+        self.filter_new_filter_button.clicked.connect(self.add_filter_button_callback)
+
+    def add_filter_button_callback(self):
+        idx = self.filter_table.rowCount()
+        cb = QComboBox()
+        cb.addItems(["Full match", "Regular Expression"])
+        cb.setEditable(False)
+
+        del_btn = QPushButton("Delete filter")
+        del_btn.clicked.connect(partial(self._filter_remove_callback, idx))
+        self.filter_table.insertRow(idx)
+        self.filter_table.setCellWidget(idx, 0, QLineEdit())
+        self.filter_table.setCellWidget(idx, 1, cb)
+        self.filter_table.setCellWidget(idx, 2, del_btn)
+        self.filter_table.resizeColumnsToContents()
+
+    def _filter_remove_callback(self, row):
+        self.filter_table.removeRow(row)
+        for i in range(self.filter_table.rowCount()):
+            self.filter_table.cellWidget(i, 2).clicked.disconnect()
+            self.filter_table.cellWidget(i, 2).clicked.connect(partial(self._filter_remove_callback, i))
 
     # </editor-fold>
 
