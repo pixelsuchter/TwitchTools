@@ -8,7 +8,7 @@ import time
 import traceback
 import re
 from functools import partial
-from typing import Dict
+from typing import Dict, List, Union
 
 from PySide6 import QtWidgets, QtGui, QtCore
 from PySide6.QtCore import Slot, QRunnable, Signal, QObject, QThreadPool
@@ -17,12 +17,36 @@ from PySide6.QtWidgets import *
 
 import twitchapi
 
-
 modactions_seperate_file_to_individual_actions_regex = re.compile(r".*\n\n.*\n\n.*\n.*|.*\n\n.*\n.*")
 modactions_get_mod_in_timeout_string_regex = re.compile(r"Timed out by (.*)for (.*) (second|seconds)")
 modactions_get_mod_in_permitted_term_string_regex = re.compile(r"Added as Permitted Term by (\w+)( via AutoMod)?")
 modactions_get_mod_in_blocked_term_string_regex = re.compile(r"Added as Blocked Term by (\w+)( via AutoMod)?")
 
+
+# <editor-fold desc="Filter Class">
+class Filter:
+    FILTER_TYPES = ("Full match", "Match partially", "Regular Expression")
+
+    def __init__(self, filter_string: str, filter_type: str):
+        self.filter_str = filter_string.strip()
+        self.filter_type = filter_type
+        self.compiled_regex = re.compile(filter_string)
+
+    def filter(self, string_to_filter: str) -> Union[str, None]:
+        if self.filter_type == "Full match":
+            return string_to_filter.strip() if string_to_filter.strip() == self.filter_str else None
+
+        elif self.filter_type == "Match partially":
+            return self.filter_str if self.filter_str in string_to_filter else None
+
+        elif self.filter_type == "Regular Expression":
+            match = self.compiled_regex.search(string_to_filter)
+            return match.group(0) if match else None
+
+        else:
+            print(f"Unknown filter type {self.filter_type}")
+        return None
+# </editor-fold>
 
 # <editor-fold desc="Multithread worker">
 class WorkerSignals(QObject):
@@ -108,8 +132,9 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.old_settings = settings.copy()
         self.settings = settings
         self.chat_widgets: Dict[str, QTableWidget] = {}
-        self.chat_message_filters = []
-        self.chat_regex_filters = []
+        self.chat_message_filters: List[str] = []
+        self.chat_regex_filters: List[re.Pattern] = []
+        self.filter_list: List[Filter] = []
 
         self.status_list = ["Idle"]
 
@@ -175,14 +200,26 @@ class TwitchToolUi(QtWidgets.QWidget):
             self.settings_window_height_LineEdit.setText(str(self.settings["Window Size"][1]))
 
     def handle_chat_message(self, message):
-        chnl = message.channel.name
-        user = message.author.name
-        if chnl in self.chat_widgets.keys():
-            self.chat_widgets[chnl].insertRow(0)
-            self.chat_widgets[chnl].setItem(0, 0, QTableWidgetItem(user))
-            self.chat_widgets[chnl].setItem(0, 1, QTableWidgetItem(message.content))
-            # print((message.timestamp, user, message.author, message.content))
-            self.chat_widgets[chnl].removeRow(500)
+        try:
+            chnl = message.channel.name
+            user = message.author.name
+            if chnl in self.chat_widgets.keys():
+                self.chat_widgets[chnl].insertRow(0)
+                self.chat_widgets[chnl].setItem(0, 0, QTableWidgetItem(user))
+                self.chat_widgets[chnl].setItem(0, 1, QTableWidgetItem(message.content))
+                # print((message.timestamp, user, message.author, message.content))
+                self.chat_widgets[chnl].removeRow(500)
+                # if message.content.strip() in self.chat_message_filters:
+                #     print(f"Filter hit: Message filter: {message.content.strip()}")
+                # for pattern in self.chat_regex_filters:
+                #     matches = pattern.search(message.content.strip())
+                #     print(matches)
+                for fltr in self.filter_list:
+                    result = fltr.filter(message.content.strip())
+                    if result:
+                        print(f"filter triggered: {fltr.filter_type}: {message.author.name}: {message.content.strip()} {result}")
+        except AttributeError:
+            pass
 
     def set_progress_label(self, text):
         self.progess_label.setText(text)
@@ -240,7 +277,6 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.follow_grabber_followList_SortingBox.currentTextChanged.connect(
             self.follow_grabber_follow_list_sorting_box_action)
         self.follow_grabber_follow_Table.doubleClicked.connect(self.follow_grabber_follow_table_action)
-
 
     def follow_grabber_follow_table_action(self, model_index: QtCore.QModelIndex):
         name = self.follow_grabber_follow_Table.item(model_index.row(), 0).text()
@@ -373,7 +409,6 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.blocklist_import_Table.setHorizontalHeaderItem(1, QTableWidgetItem("User ID"))
         self.blocklist_block_imported_list_Button = QPushButton("Block imported List")
 
-
         # Create layout and add widgets
         button_row_layout = QHBoxLayout()
         button_row_layout.addWidget(self.blocklist_get_blocklist_Button)
@@ -448,7 +483,7 @@ class TwitchToolUi(QtWidgets.QWidget):
                     idx = 0
                     for name in lines:
                         if name.strip().lower():
-                            _table.setItem(old_rowcount+idx, 0, QTableWidgetItem(name.strip().lower()))
+                            _table.setItem(old_rowcount + idx, 0, QTableWidgetItem(name.strip().lower()))
                             idx += 1
                 names_no_id = []
                 for idx in range(_table.rowCount()):
@@ -535,6 +570,7 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.remove_status("Cleaning Blocklist")
         self.blocklist_clean_blocklist_Button.setEnabled(True)
         self.blocklist_get_blocklist_Button.setEnabled(True)
+
     # </editor-fold>
 
     # <editor-fold desc="Banlist tab">
@@ -590,7 +626,6 @@ class TwitchToolUi(QtWidgets.QWidget):
             with open(file_to_write[0], "w") as f:
                 for i in range(self.banlist_import_ListWidget.count()):
                     f.write(f"{self.banlist_import_ListWidget.item(i).text()}\n")
-
 
     def banlist_clean_imported_banlist_callback(self):
         self.add_status("Cleaning imported Banlist")
@@ -740,7 +775,6 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.mod_actions_Table.setHorizontalHeaderItem(4, QTableWidgetItem("Timestamp"))
         self.mod_actions_Table.setHorizontalHeaderItem(5, QTableWidgetItem("Info"))
 
-
         # Create layout and add widgets
         button_row_layout = QHBoxLayout()
         button_row_layout.addWidget(self.modactions_export_all_Button)
@@ -762,7 +796,6 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.modactions_auto_export_bans_checkbox.stateChanged.connect(self.checkbox_event)
         self.modactions_ids_to_names_Button.clicked.connect(self.modactions_ids_to_names_callback)
         self.modactions_import_button.clicked.connect(self.modactions_import_callback)
-
 
     def modactions_import_callback(self):
         files_to_read = QFileDialog.getOpenFileNames(caption="Select files to import", dir="", filter="Text files (*.txt)")
@@ -865,7 +898,6 @@ class TwitchToolUi(QtWidgets.QWidget):
                 else:
                     print(action_parts)
         self.mod_actions_Table.resizeColumnsToContents()
-
 
     def modactions_ids_to_names_callback(self):
         rowcount = self.mod_actions_Table.rowCount()
@@ -1024,11 +1056,13 @@ class TwitchToolUi(QtWidgets.QWidget):
         filter_buttonrow_layout = QHBoxLayout()
 
         self.filter_new_filter_button = QPushButton("Add Filter")
+        self.reload_filters_button = QPushButton("Reload Filters")
 
         self.filter_table = QTableWidget()
         self.filter_table.setColumnCount(4)
 
         filter_buttonrow_layout.addWidget(self.filter_new_filter_button)
+        filter_buttonrow_layout.addWidget(self.reload_filters_button)
         filter_layout.addLayout(filter_buttonrow_layout)
         filter_layout.addWidget(self.filter_table)
         filter_widget.setLayout(filter_layout)
@@ -1039,11 +1073,13 @@ class TwitchToolUi(QtWidgets.QWidget):
         parent.setLayout(layout)
 
         self.filter_new_filter_button.clicked.connect(self.add_filter_button_callback)
+        self.reload_filters_button.clicked.connect(self.reload_filters_callback)
 
     def add_filter_button_callback(self):
         idx = self.filter_table.rowCount()
         cb = QComboBox()
-        cb.addItems(["Full match", "Regular Expression"])
+        # cb.addItems(["Full match", "Regular Expression"])
+        cb.addItems(Filter.FILTER_TYPES)
         cb.setEditable(False)
 
         del_btn = QPushButton("Delete filter")
@@ -1054,11 +1090,38 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.filter_table.setCellWidget(idx, 2, del_btn)
         self.filter_table.resizeColumnsToContents()
 
+    def reload_filters_callback(self):
+        self.load_filters()
+
     def _filter_remove_callback(self, row):
         self.filter_table.removeRow(row)
         for i in range(self.filter_table.rowCount()):
             self.filter_table.cellWidget(i, 2).clicked.disconnect()
             self.filter_table.cellWidget(i, 2).clicked.connect(partial(self._filter_remove_callback, i))
+
+    def load_filters(self):
+        # self.chat_message_filters.clear()
+        # self.chat_regex_filters.clear()
+        self.filter_list.clear()
+        for i in range(self.filter_table.rowCount()):
+            _line_edit: QLineEdit = self.filter_table.cellWidget(i, 0)
+            if _line_edit:
+                filter_text = _line_edit.text().strip()
+                _combobox: QComboBox = self.filter_table.cellWidget(i, 1)
+                if _combobox and filter_text:
+                    selected_filter_mode = _combobox.currentText()
+                    # if selected_filter_mode == "Full match":
+                    #     self.chat_message_filters.append(filter_text)
+                    # elif selected_filter_mode == "Regular Expression":
+                    #     _re = re.compile(filter_text)
+                    #     self.chat_regex_filters.append(_re)
+                    # else:
+                    #     print(f"no filter mode for {selected_filter_mode}")
+                    f = Filter(filter_text, selected_filter_mode)
+                    self.filter_list.append(f)
+        print(self.filter_list)
+        # print(self.chat_message_filters)
+        # print(self.chat_regex_filters)
 
     # </editor-fold>
 
@@ -1095,7 +1158,6 @@ class TwitchToolUi(QtWidgets.QWidget):
             with open("settings.json", "w") as settings_file:
                 json.dump(self.settings, settings_file, indent="  ")
             changed = True
-
 
         if not ", ".join(self.api.credentials["bot channels"]) == self.credentials_channels_to_join_LineEdit.text():
             with open("credentials.json", "r") as credentials_file:
