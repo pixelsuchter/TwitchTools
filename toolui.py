@@ -3,12 +3,14 @@ import csv
 import datetime
 import json
 import os.path
+import pickle
 import sys
 import time
 import traceback
 import re
 from functools import partial
-from typing import Dict, List, Union
+from json import JSONEncoder
+from typing import Dict, List, Union, Tuple
 
 from PySide6 import QtWidgets, QtGui, QtCore
 from PySide6.QtCore import Slot, QRunnable, Signal, QObject, QThreadPool
@@ -16,6 +18,7 @@ from PySide6.QtGui import Qt, QIcon
 from PySide6.QtWidgets import *
 
 import twitchapi
+import twitchio
 
 modactions_seperate_file_to_individual_actions_regex = re.compile(r".*\n\n.*\n\n.*\n.*|.*\n\n.*\n.*")
 modactions_get_mod_in_timeout_string_regex = re.compile(r"Timed out by (.*)for (.*) (second|seconds)")
@@ -26,22 +29,27 @@ modactions_get_mod_in_blocked_term_string_regex = re.compile(r"Added as Blocked 
 # <editor-fold desc="Filter Class">
 class Filter:
     FILTER_TYPES = ("Full match", "Match partially", "Regular Expression")
+    FILTER_TARGETS = ("Message", "Author")
+    FILTER_PENALITYS = ("Delete Message", "Timeout 1m", "Timeout 10m", "Ban")
 
-    def __init__(self, filter_string: str, filter_type: str):
+    def __init__(self, filter_string: str, filter_type: str, target: str, penality: str):
         self.filter_str = filter_string.strip()
         self.filter_type = filter_type
         self.compiled_regex = re.compile(filter_string)
+        self.target = target
+        self.penality = penality
 
-    def filter(self, string_to_filter: str) -> Union[str, None]:
+    def filter(self, message: twitchio.Message) -> Union[Tuple[str, str], None]:
+        string_to_filter = message.content.strip() if self.target == "Message" else message.author.name
         if self.filter_type == "Full match":
-            return string_to_filter.strip() if string_to_filter.strip() == self.filter_str else None
+            return (string_to_filter.strip(), self.penality) if string_to_filter.strip() == self.filter_str else None
 
         elif self.filter_type == "Match partially":
-            return self.filter_str if self.filter_str in string_to_filter else None
+            return (self.filter_str, self.penality) if self.filter_str in string_to_filter else None
 
         elif self.filter_type == "Regular Expression":
             match = self.compiled_regex.search(string_to_filter)
-            return match.group(0) if match else None
+            return (match.group(0), self.penality) if match else None
 
         else:
             print(f"Unknown filter type {self.filter_type}")
@@ -132,8 +140,6 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.old_settings = settings.copy()
         self.settings = settings
         self.chat_widgets: Dict[str, QTableWidget] = {}
-        self.chat_message_filters: List[str] = []
-        self.chat_regex_filters: List[re.Pattern] = []
         self.filter_list: List[Filter] = []
 
         self.status_list = ["Idle"]
@@ -189,6 +195,8 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.init_chat_tab(self.chat_tab)
         self.init_settings_tab(self.settings_tab)
 
+        self.load_filters()
+
     def tab_clicked(self):
         if self.tool_tab_widget.currentWidget() is self.settings_tab:
             # Update settings
@@ -199,7 +207,7 @@ class TwitchToolUi(QtWidgets.QWidget):
             self.settings_window_width_LineEdit.setText(str(self.settings["Window Size"][0]))
             self.settings_window_height_LineEdit.setText(str(self.settings["Window Size"][1]))
 
-    def handle_chat_message(self, message):
+    def handle_chat_message(self, message: twitchio.Message):
         try:
             chnl = message.channel.name
             user = message.author.name
@@ -207,17 +215,12 @@ class TwitchToolUi(QtWidgets.QWidget):
                 self.chat_widgets[chnl].insertRow(0)
                 self.chat_widgets[chnl].setItem(0, 0, QTableWidgetItem(user))
                 self.chat_widgets[chnl].setItem(0, 1, QTableWidgetItem(message.content))
-                # print((message.timestamp, user, message.author, message.content))
                 self.chat_widgets[chnl].removeRow(500)
-                # if message.content.strip() in self.chat_message_filters:
-                #     print(f"Filter hit: Message filter: {message.content.strip()}")
-                # for pattern in self.chat_regex_filters:
-                #     matches = pattern.search(message.content.strip())
-                #     print(matches)
+
                 for fltr in self.filter_list:
-                    result = fltr.filter(message.content.strip())
+                    result = fltr.filter(message)
                     if result:
-                        print(f"filter triggered: {fltr.filter_type}: {message.author.name}: {message.content.strip()} {result}")
+                        print(f"filter triggered: {fltr.filter_type}\nMessage Author: {message.author.name}\nMessage Content: {message.content.strip()}\nTriggering Part:{result[0]}\nPenality: {result[1]}")
         except AttributeError:
             pass
 
@@ -1056,13 +1059,13 @@ class TwitchToolUi(QtWidgets.QWidget):
         filter_buttonrow_layout = QHBoxLayout()
 
         self.filter_new_filter_button = QPushButton("Add Filter")
-        self.reload_filters_button = QPushButton("Reload Filters")
+        self.save_filters_button = QPushButton("Save Filters")
 
         self.filter_table = QTableWidget()
-        self.filter_table.setColumnCount(4)
+        self.filter_table.setColumnCount(5)
 
         filter_buttonrow_layout.addWidget(self.filter_new_filter_button)
-        filter_buttonrow_layout.addWidget(self.reload_filters_button)
+        filter_buttonrow_layout.addWidget(self.save_filters_button)
         filter_layout.addLayout(filter_buttonrow_layout)
         filter_layout.addWidget(self.filter_table)
         filter_widget.setLayout(filter_layout)
@@ -1072,26 +1075,38 @@ class TwitchToolUi(QtWidgets.QWidget):
         layout.addWidget(chat_tabs)
         parent.setLayout(layout)
 
-        self.filter_new_filter_button.clicked.connect(self.add_filter_button_callback)
-        self.reload_filters_button.clicked.connect(self.reload_filters_callback)
+        self.filter_new_filter_button.clicked.connect(self.add_filter)
+        self.save_filters_button.clicked.connect(self.save_filters)
 
-    def add_filter_button_callback(self):
+    def add_filter(self, filter_text: str = "", filter_type: str = Filter.FILTER_TYPES[0], filter_target: str = Filter.FILTER_TARGETS[0], filter_penality: str = Filter.FILTER_PENALITYS[0]):
         idx = self.filter_table.rowCount()
-        cb = QComboBox()
-        # cb.addItems(["Full match", "Regular Expression"])
-        cb.addItems(Filter.FILTER_TYPES)
-        cb.setEditable(False)
+        filter_text_lineedit = QLineEdit()
+        filter_text_lineedit.setText(filter_text)
+
+        filter_type_combobox = QComboBox()
+        filter_type_combobox.addItems(Filter.FILTER_TYPES)
+        filter_type_combobox.setCurrentText(filter_type)
+        filter_type_combobox.setEditable(False)
+
+        filter_target_combobox = QComboBox()
+        filter_target_combobox.addItems(Filter.FILTER_TARGETS)
+        filter_target_combobox.setCurrentText(filter_target)
+        filter_target_combobox.setEditable(False)
+
+        filter_penalty_combobox = QComboBox()
+        filter_penalty_combobox.addItems(Filter.FILTER_PENALITYS)
+        filter_penalty_combobox.setCurrentText(filter_penality)
+        filter_penalty_combobox.setEditable(False)
 
         del_btn = QPushButton("Delete filter")
         del_btn.clicked.connect(partial(self._filter_remove_callback, idx))
         self.filter_table.insertRow(idx)
-        self.filter_table.setCellWidget(idx, 0, QLineEdit())
-        self.filter_table.setCellWidget(idx, 1, cb)
-        self.filter_table.setCellWidget(idx, 2, del_btn)
+        self.filter_table.setCellWidget(idx, 0, filter_text_lineedit)
+        self.filter_table.setCellWidget(idx, 1, filter_type_combobox)
+        self.filter_table.setCellWidget(idx, 2, filter_target_combobox)
+        self.filter_table.setCellWidget(idx, 3, filter_penalty_combobox)
+        self.filter_table.setCellWidget(idx, 4, del_btn)
         self.filter_table.resizeColumnsToContents()
-
-    def reload_filters_callback(self):
-        self.load_filters()
 
     def _filter_remove_callback(self, row):
         self.filter_table.removeRow(row)
@@ -1099,29 +1114,40 @@ class TwitchToolUi(QtWidgets.QWidget):
             self.filter_table.cellWidget(i, 2).clicked.disconnect()
             self.filter_table.cellWidget(i, 2).clicked.connect(partial(self._filter_remove_callback, i))
 
-    def load_filters(self):
-        # self.chat_message_filters.clear()
-        # self.chat_regex_filters.clear()
+    def reload_filters(self):
         self.filter_list.clear()
         for i in range(self.filter_table.rowCount()):
             _line_edit: QLineEdit = self.filter_table.cellWidget(i, 0)
             if _line_edit:
                 filter_text = _line_edit.text().strip()
-                _combobox: QComboBox = self.filter_table.cellWidget(i, 1)
-                if _combobox and filter_text:
-                    selected_filter_mode = _combobox.currentText()
-                    # if selected_filter_mode == "Full match":
-                    #     self.chat_message_filters.append(filter_text)
-                    # elif selected_filter_mode == "Regular Expression":
-                    #     _re = re.compile(filter_text)
-                    #     self.chat_regex_filters.append(_re)
-                    # else:
-                    #     print(f"no filter mode for {selected_filter_mode}")
-                    f = Filter(filter_text, selected_filter_mode)
+                filter_mode_combobox: QComboBox = self.filter_table.cellWidget(i, 1)
+                if filter_mode_combobox and filter_text:
+                    selected_filter_mode = filter_mode_combobox.currentText()
+                    target_combobox: QComboBox = self.filter_table.cellWidget(i, 2)
+                    if target_combobox:
+                        target = target_combobox.currentText()
+                        penality_combobox: QComboBox = self.filter_table.cellWidget(i, 3)
+                        if penality_combobox:
+                            penality = penality_combobox.currentText()
+                            f = Filter(filter_text, selected_filter_mode, target, penality)
                     self.filter_list.append(f)
-        print(self.filter_list)
-        # print(self.chat_message_filters)
-        # print(self.chat_regex_filters)
+
+    def save_filters(self):
+        self.reload_filters()
+        if not os.path.exists("data"):
+            os.mkdir("data")
+        with open("data/chat_filters.pickle", "wb") as file:
+            pickle.dump(self.filter_list, file, )
+
+    def load_filters(self):
+        if not os.path.isfile("data/chat_filters.pickle"):
+            print("No filter file")
+        else:
+            with open("data/chat_filters.pickle", "rb") as file:
+                self.filter_list = pickle.load(file)
+            for fltr in self.filter_list:
+                fltr: Filter
+                self.add_filter(filter_text=fltr.filter_str, filter_target=fltr.target, filter_type=fltr.filter_type, filter_penality=fltr.penality)
 
     # </editor-fold>
 
