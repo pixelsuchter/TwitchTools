@@ -213,6 +213,19 @@ class Twitch_api:
             progress_callback.emit({follow["to_login"]: follow["followed_at"] for follow in response["data"]})
             offset = response["pagination"]
 
+    def get_all_channel_followers_names(self, user_id, progress_callback):
+        with self.api_lock:
+            response = self.twitch_helix.get_users_follows(to_id=user_id, first=100)
+        progress_callback.emit({follow["from_login"]: follow["followed_at"] for follow in response["data"]})
+        offset = response["pagination"]
+        i = 0
+        while response["pagination"] and self.run_flag[0]:
+            with self.api_lock:
+                response = self.twitch_helix.get_users_follows(to_id=user_id, first=100, after=offset["cursor"])
+                i += 1
+            progress_callback.emit({follow["from_login"]: follow["followed_at"] for follow in response["data"]})
+            offset = response["pagination"]
+
     def get_user_info(self, user_id, progress_callback):
         with self.api_lock:
             userinfo = self.twitch_legacy.users.get_by_id(user_id)

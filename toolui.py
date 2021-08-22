@@ -255,7 +255,8 @@ class TwitchToolUi(QtWidgets.QWidget):
     def init_follow_grabber(self, parent):
         # Create widgets
         self.follow_grabber_username_LineEdit = QLineEdit("")
-        self.follow_grabber_getFollows_Button = QPushButton("Get Follows")
+        self.follow_grabber_getFollowing_Button = QPushButton("Get Following")
+        self.follow_grabber_getFollowers_Button = QPushButton("Get Followers")
         self.follow_grabber_follow_Table = QTableWidget()
         self.follow_grabber_follow_Table.setColumnCount(2)
         self.follow_grabber_follow_Table.setHorizontalHeaderItem(0, QTableWidgetItem("Name"))
@@ -266,9 +267,14 @@ class TwitchToolUi(QtWidgets.QWidget):
             ["Name A-Z", "Name Z-A", "Follow time New-Old", "Follow time Old-New"])
 
         # Create layout and add widgets
+        buttonrow = QHBoxLayout()
+        buttonrow.addWidget(self.follow_grabber_username_LineEdit)
+        buttonrow.addWidget(self.follow_grabber_getFollowing_Button)
+        buttonrow.addWidget(self.follow_grabber_getFollowers_Button)
+
+
         layout = QVBoxLayout()
-        layout.addWidget(self.follow_grabber_username_LineEdit)
-        layout.addWidget(self.follow_grabber_getFollows_Button)
+        layout.addLayout(buttonrow)
         layout.addWidget(self.follow_grabber_followList_SortingBox)
         layout.addWidget(self.follow_grabber_follow_Table)
 
@@ -276,7 +282,8 @@ class TwitchToolUi(QtWidgets.QWidget):
         parent.setLayout(layout)
 
         # Add actions
-        self.follow_grabber_getFollows_Button.clicked.connect(self.follow_grabber_get_follows_button_action)
+        self.follow_grabber_getFollowing_Button.clicked.connect(partial(self.follow_grabber_get_following_button_action, "Following"))
+        self.follow_grabber_getFollowers_Button.clicked.connect(partial(self.follow_grabber_get_following_button_action, "Followers"))
         self.follow_grabber_followList_SortingBox.currentTextChanged.connect(
             self.follow_grabber_follow_list_sorting_box_action)
         self.follow_grabber_follow_Table.doubleClicked.connect(self.follow_grabber_follow_table_action)
@@ -300,8 +307,8 @@ class TwitchToolUi(QtWidgets.QWidget):
             self.add_status("Error in follow grabber")
 
     # <editor-fold desc="Follow grabber button action">
-    def follow_grabber_get_follows_button_action(self):
-        self.follow_grabber_getFollows_Button.setEnabled(False)
+    def follow_grabber_get_following_button_action(self, follow_direction):
+        self.follow_grabber_getFollowing_Button.setEnabled(False)
         self.add_status("Getting followers, please wait")
         self.follow_grabber_follow_Table.clearContents()
         self.follow_grabber_follow_Table.setRowCount(0)
@@ -310,10 +317,18 @@ class TwitchToolUi(QtWidgets.QWidget):
             user_id = self.api.names_to_id(name)
             if user_id:
                 user_id = user_id[0]
-                worker = Worker(self.api.get_all_followed_channel_names, user_id)
-                worker.signals.progress.connect(self.follow_grabber_get_follows_button_thread_return)
-                worker.signals.result.connect(self.follow_grabber_get_follows_button_thread_done)
-                self.threadpool.start(worker)
+                if follow_direction == "Following":
+                    worker = Worker(self.api.get_all_followed_channel_names, user_id)
+                    worker.signals.progress.connect(self.follow_grabber_get_follows_button_thread_return)
+                    worker.signals.result.connect(self.follow_grabber_get_follows_button_thread_done)
+                    self.threadpool.start(worker)
+                elif follow_direction == "Followers":
+                    worker = Worker(self.api.get_all_channel_followers_names, user_id)
+                    worker.signals.progress.connect(self.follow_grabber_get_follows_button_thread_return)
+                    worker.signals.result.connect(self.follow_grabber_get_follows_button_thread_done)
+                    self.threadpool.start(worker)
+                else:
+                    self.follow_grabber_get_follows_button_thread_done()
             else:
                 self.follow_grabber_get_follows_button_thread_done()
         else:
@@ -327,10 +342,30 @@ class TwitchToolUi(QtWidgets.QWidget):
                 self.follow_grabber_follow_Table.setItem(row + row_count, col, QTableWidgetItem(QIcon(), str(entry)))
 
     def follow_grabber_get_follows_button_thread_done(self):
+        self.follow_grabber_follow_Table.sortByColumn(1, Qt.DescendingOrder)
+        follow_dict: Dict[str, List[str]] = {}
+        for i in range(self.follow_grabber_follow_Table.rowCount()):
+            follow_time = self.follow_grabber_follow_Table.item(i, 1).text()
+            if follow_time in follow_dict.keys():
+                follow_dict[follow_time].append(self.follow_grabber_follow_Table.item(i, 0).text())
+            else:
+                follow_dict[follow_time] = [self.follow_grabber_follow_Table.item(i, 0).text()]
+        print(follow_dict)
+        potential_bots = []
+        for follow_per_second in follow_dict.values():
+            if len(follow_per_second) >= 3:
+                potential_bots.extend(follow_per_second)
+        print(potential_bots)
+        for i in range(self.follow_grabber_follow_Table.rowCount()):
+            name = self.follow_grabber_follow_Table.item(i, 0).text()
+            if name in potential_bots:
+                self.follow_grabber_follow_Table.item(i, 0).setBackground(QtGui.QColor(100, 0, 0))
+                self.follow_grabber_follow_Table.item(i, 1).setBackground(QtGui.QColor(100, 0, 0))
+
         self.follow_grabber_follow_list_sorting_box_action()  # Update sorting
         self.follow_grabber_follow_Table.resizeColumnsToContents()
         self.remove_status("Getting followers, please wait")
-        self.follow_grabber_getFollows_Button.setEnabled(True)
+        self.follow_grabber_getFollowing_Button.setEnabled(True)
 
     # </editor-fold>
 
