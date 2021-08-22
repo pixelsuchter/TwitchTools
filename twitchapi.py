@@ -52,13 +52,15 @@ class Twitch_api:
         self.twitch_legacy = twitch.TwitchClient(client_id=self.credentials["client id"], oauth_token=self.credentials["oauth token"])
 
         bot_token = self.credentials['bot token'] if self.credentials['use seperate token for bot'] else self.credentials['oauth token']
+        timeout = twitchchat.non_mod_timeout if self.credentials['use seperate token for bot'] else twitchchat.mod_timeout
         if not bot_token:
             raise NoBotTokenException
         else:
             self.bot = twitchchat.Bot(token=bot_token,
                                       client_id=self.own_id, nickname=self.credentials["bot nickname"],
                                       command_prefix=self.credentials["bot command prefix"],
-                                      channels_to_join=self.credentials["bot channels"])
+                                      channels_to_join=self.credentials["bot channels"],
+                                      message_timeout=timeout)
 
         self.pubsub = twitchAPI.pubsub.PubSub(self.twitch_helix)
 
