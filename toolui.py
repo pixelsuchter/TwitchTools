@@ -1146,8 +1146,8 @@ class TwitchToolUi(QtWidgets.QWidget):
     def _filter_remove_callback(self, row):
         self.filter_table.removeRow(row)
         for i in range(self.filter_table.rowCount()):
-            self.filter_table.cellWidget(i, 2).clicked.disconnect()
-            self.filter_table.cellWidget(i, 2).clicked.connect(partial(self._filter_remove_callback, i))
+            self.filter_table.cellWidget(i, 4).clicked.disconnect()
+            self.filter_table.cellWidget(i, 4).clicked.connect(partial(self._filter_remove_callback, i))
 
     def reload_filters(self):
         self.filter_list.clear()
