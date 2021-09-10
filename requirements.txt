@@ -1,0 +1,6 @@
+pydle~=0.9.4
+PySide6~=6.1.1
+twitchio~=1.2.3
+aiohttp~=3.7.4.post0
+websockets~=9.1
+twitchAPI~=2.3.2
