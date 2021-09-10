@@ -17,6 +17,10 @@ class NoBotTokenException(Exception):
 
 
 class Twitch_api:
+    FILTER_AFFILIATE = "affiliate"
+    FILTER_PARTNER = "partner"
+    FILTER_STAFF = "staff"
+
     def __init__(self, run_flag):
         self.run_flag = run_flag
         self.credentials = {}
@@ -69,7 +73,6 @@ class Twitch_api:
         with open("credentials.json", "r") as credentials_file:
             _credentials = json.load(credentials_file)
             self.credentials = _credentials
-
 
     # <editor-fold desc="TwitchAPI Section">
     def names_to_id(self, names: Union[List, str]):
@@ -146,7 +149,7 @@ class Twitch_api:
             progress_callback.emit(f"Done")
         return namelist
 
-    def get_valid_users(self, user_names: List, progress_callback=None):
+    def get_valid_users(self, user_names: List, progress_callback=None, name_filter=()):
         total_num_of_ids = len(user_names)
         namelist = []
         num_of_potential_names_done = 0
@@ -154,7 +157,7 @@ class Twitch_api:
             with self.api_lock:
                 num_of_potential_names_done += len(user_names)
                 response = self.twitch_helix.get_users(logins=user_names)
-                namelist.extend([user["login"] for user in response["data"]])
+                namelist.extend([user["login"] for user in response["data"] if user["broadcaster_type"] not in name_filter])
                 if progress_callback:
                     progress_callback.emit(f"Checking for valid users {num_of_potential_names_done} out of (potentially) {total_num_of_ids}. {len(namelist)} Valid users")
         else:
@@ -165,7 +168,7 @@ class Twitch_api:
                     try:
                         num_of_potential_names_done += len(_user_names_part)
                         response = self.twitch_helix.get_users(logins=_user_names_part)
-                        namelist.extend([user["login"] for user in response["data"]])
+                        namelist.extend([user["login"] for user in response["data"] if user["broadcaster_type"] not in name_filter])
                     except twitchAPI.TwitchAPIException:
                         print(_user_names_part)
                 _user_names = _user_names[100:]
@@ -228,7 +231,7 @@ class Twitch_api:
 
     def get_user_info(self, user_id, progress_callback):
         with self.api_lock:
-            userinfo = self.twitch_legacy.users.get_by_id(user_id)
+            userinfo = self.twitch_helix.get_users([user_id])
         progress_callback.emit(userinfo)
 
     def get_all_blocked_users(self, progress_callback):

@@ -416,8 +416,8 @@ class TwitchToolUi(QtWidgets.QWidget):
 
     def user_info_get_info_button_progress(self, user_info):
         if user_info:
-            self.user_info_info_Table.setRowCount(len(user_info))
-            for row, line in enumerate(user_info.items()):
+            self.user_info_info_Table.setRowCount(len(user_info["data"][0].items()))
+            for row, line in enumerate(user_info["data"][0].items()):
                 for col, entry in enumerate(line):
                     self.user_info_info_Table.setItem(row, col, QTableWidgetItem(str(entry)))
             self.user_info_info_Table.resizeColumnsToContents()
@@ -627,23 +627,42 @@ class TwitchToolUi(QtWidgets.QWidget):
         self.banlist_clean_banlist_Button = QPushButton("Clean Banlist")
         self.banlist_clean_importedlist_Button = QPushButton("Clean Imported Banlist")
         self.banlist_export_imported_banlist_Button = QPushButton("Export Imported Banlist")
+        self.filter_affiliate_checkbox = QCheckBox("Remove Affiliates")
+        self.filter_affiliate_checkbox.setChecked(True)
+        self.filter_partner_checkbox = QCheckBox("Remove Partners")
+        self.filter_partner_checkbox.setChecked(True)
 
         # Create layout and add widgets
-        button_row = QHBoxLayout()
-        button_row.addWidget(self.banlist_get_banlist_Button)
-        button_row.addWidget(self.banlist_export_namelist_Button)
-        button_row.addWidget(self.banlist_clean_banlist_Button)
-        button_row.addWidget(self.banlist_import_namelist_Button)
-        button_row.addWidget(self.banlist_ban_imported_names_Button)
-        button_row.addWidget(self.banlist_clean_importedlist_Button)
-        button_row.addWidget(self.banlist_export_imported_banlist_Button)
+        api_side_button_row_top = QHBoxLayout()
+        api_side_button_row_top.addWidget(self.banlist_get_banlist_Button)
+        api_side_button_row_top.addWidget(self.banlist_export_namelist_Button)
+        api_side_button_row_top.addWidget(self.banlist_clean_banlist_Button)
+
+        import_side_button_row_top = QHBoxLayout()
+        import_side_button_row_top.addWidget(self.banlist_import_namelist_Button)
+        import_side_button_row_top.addWidget(self.banlist_ban_imported_names_Button)
+        import_side_button_row_top.addWidget(self.banlist_clean_importedlist_Button)
+        import_side_button_row_top.addWidget(self.banlist_export_imported_banlist_Button)
+
+        api_side_button_row_bottom = QHBoxLayout()
+
+        import_side_button_row_bottom = QHBoxLayout()
+        import_side_button_row_bottom.addWidget(self.filter_affiliate_checkbox)
+        import_side_button_row_bottom.addWidget(self.filter_partner_checkbox)
+
 
         table_row = QHBoxLayout()
         table_row.addWidget(self.banlist_info_Table)
         table_row.addWidget(self.banlist_import_ListWidget)
 
+        button_rows = QGridLayout()
+        button_rows.addLayout(api_side_button_row_top, 0, 0)
+        button_rows.addLayout(import_side_button_row_top, 0, 1)
+        button_rows.addLayout(api_side_button_row_bottom, 1, 0)
+        button_rows.addLayout(import_side_button_row_bottom, 1, 1)
+
         layout = QVBoxLayout()
-        layout.addLayout(button_row)
+        layout.addLayout(button_rows)
         layout.addLayout(table_row)
 
         # Set dialog layout
@@ -675,7 +694,13 @@ class TwitchToolUi(QtWidgets.QWidget):
                 user_name = item.text()
                 if user_name and "+" not in user_name:
                     banlist.append(user_name)
-        worker = Worker(self.api.get_valid_users, banlist)
+
+        _filter = [self.api.FILTER_STAFF]
+        if self.filter_partner_checkbox.isChecked():
+            _filter.append(self.api.FILTER_PARTNER)
+        if self.filter_affiliate_checkbox.isChecked():
+            _filter.append(self.api.FILTER_AFFILIATE)
+        worker = Worker(self.api.get_valid_users, banlist, name_filter=_filter)
         worker.signals.progress.connect(self.set_progress_label)
         worker.signals.result.connect(self.banlist_clean_imported_banlist_names_validated)
         self.threadpool.start(worker)
